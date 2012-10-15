@@ -4,9 +4,12 @@ project(patchMatch)
 #find_package(MATLAB REQUIRED)
 set ( MATLAB_INCLUDE_DIR "C:/Program Files/MATLAB/R2010b/extern/include" )
 set ( MATLAB_LIB_PATH "C:/Program Files/MATLAB/R2010b/extern/lib/win64/microsoft")
+set ( OPENCV_LIB_PATH "C:/Enliang/library/opencv-2.4.2/build/x64/vc10/lib")
+set ( OPENCV_INCLUDE_DIR "C:/Enliang/library/opencv-2.4.2/include")
 
 #--------------------------------------------------------------------------
-include_directories(${MATLAB_INCLUDE_DIR})
+include_directories(${MATLAB_INCLUDE_DIR}
+					${OPENCV_INCLUDE_DIR})
 link_directories(${MATLAB_LIB_PATH})
 
 add_library(patchMatch SHARED ${CMAKE_SOURCE_DIR}/mexFunction.def

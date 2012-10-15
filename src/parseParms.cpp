@@ -74,6 +74,17 @@ void patchMatch::findRange(const int &row, const int &col, int &rowStart, int &r
 	colEnd = col + halfWindowSize < w ? (col + halfWindowSize) : w;
 }
 
+void patchMatch::findPixelPos(std::vector<pixelPos> &pixelPostions , const int &rowStart, const int &rowEnd, const int &colStart, const int &colEnd)
+{
+	for(int i = rowStart; i<rowEnd; i++)
+	{
+		for(int j = colStart; j<colEnd; j++)
+		{
+			pixelPostions.push_back(pixelPos(j, i));
+		}
+	}
+}
+
 void patchMatch:: leftToRight()
 {
 	int ref_h = static_cast<int>(_imgStruct_1[0].h);
@@ -90,8 +101,13 @@ void patchMatch:: leftToRight()
 			int rowStart; int rowEnd;
 			findRange(row, col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);
 			//2) find all the pixels in the current image
+			int numOfPixels = (colEnd - colStart + 1) * (rowEnd - rowStart + 1); 
+			std::vector<pixelPos> refPixelPos;
+			refPixelPos.reserve(numOfPixels);
+			findPixelPos(refPixelPos, rowStart, rowEnd, colStart, colEnd);
 
 			//3) find the color given pixels
+
 
 			//4) transforming the pixels to the other image (depth given)
 

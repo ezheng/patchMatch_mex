@@ -4,6 +4,15 @@
 #include <mex.h>
 #include <string>
 #include <vector>
+//#include <opencv/cxcore.h>
+
+class pixelPos 
+{
+public:
+	double _x;
+	double _y;
+	pixelPos(double x, double y){_x = x; _y = y;}
+};
 
 typedef struct
 {
@@ -67,6 +76,8 @@ public:
 
 	void leftToRight();
 	void findRange(const int &row, const int &col, int &rowStart, int &rowEnd, int &colStart, int &colEnd, const int &halfWindowSize, const int &w, const int &h);
+	void findPixelPos(std::vector<pixelPos> &pixelPos , const int &rowStart, const int &rowEnd, const int &colStart, const int &colEnd);
+
 };
 
 
