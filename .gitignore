@@ -1,0 +1,4 @@
+build_32
+build_64
+/bin
+*.exe

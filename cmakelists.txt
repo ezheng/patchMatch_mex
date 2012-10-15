@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 2.7)
+project(patchMatch)
+
+#find_package(MATLAB REQUIRED)
+set ( MATLAB_INCLUDE_DIR "C:/Program Files/MATLAB/R2010b/extern/include" )
+set ( MATLAB_LIB_PATH "C:/Program Files/MATLAB/R2010b/extern/lib/win64/microsoft")
+
+#--------------------------------------------------------------------------
+include_directories(${MATLAB_INCLUDE_DIR})
+link_directories(${MATLAB_LIB_PATH})
+
+add_library(patchMatch SHARED ${CMAKE_SOURCE_DIR}/mexFunction.def
+			src/parseParms.h src/parseParms.cpp
+			src/patchMatch.cpp)
+						  
+target_link_libraries(patchMatch libmex.lib libmx.lib)
+set_target_properties(patchMatch PROPERTIES SUFFIX  ".mexw64")
