@@ -6,9 +6,20 @@
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-	patchMatch allData(prhs);
+	if( nrhs != 5)
+		mexErrMsgTxt("the number of input is not correct. \nThe input: ref_img_struct, otherImage_struct, depthMap, randMap, mapDistribution\n");
+	if( nlhs != 2)
+		mexErrMsgTxt("the number of output is not correct. \nThe output: depthMap, mapDistributio\n ");
+
+
+	patchMatch pm(prhs);
+
+	pm.leftToRight();	
 	
-	
+
+	// copy the output:
+	plhs[0] = pm._depthMaps.p;
+	plhs[1] = pm._distributionMap.p;
 
 
 }

@@ -4,8 +4,8 @@ project(patchMatch)
 #find_package(MATLAB REQUIRED)
 set ( MATLAB_INCLUDE_DIR "C:/Program Files/MATLAB/R2011a/extern/include" )
 set ( MATLAB_LIB_PATH "C:/Program Files/MATLAB/R2011a/extern/lib/win64/microsoft")
-set ( OPENCV_LIB_PATH "F:/Enliang/library_64/opencv/build_64/install/lib")
-set ( OPENCV_INCLUDE_DIR "F:/Enliang/library_64/opencv/build_64/install/include")
+set ( OPENCV_LIB_PATH "C:/Enliang/library_64/opencv-2.4.2/build_64/install/lib")
+set ( OPENCV_INCLUDE_DIR "C:/Enliang/library_64/opencv-2.4.2/build_64/install/include")
 
 #--------------------------------------------------------------------------
 include_directories(${MATLAB_INCLUDE_DIR}

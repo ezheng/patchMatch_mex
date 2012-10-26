@@ -33,6 +33,7 @@ public:
 
 	patchMatch(const mxArray *prhs[])
 	{
+		
 		parseImageStructure(&_imgStruct_1, prhs[0]);		// image structure 1
 		parseImageStructure(&_imgStruct_2, prhs[1]);		// image structure 2
 		parseDataMap(&_depthMaps, prhs[2]);		
