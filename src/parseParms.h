@@ -48,7 +48,7 @@ public:
 
 	void parseImageStructure(std::vector<ImageStruct> *allImgStruct, const mxArray *p);
 	void parseDataMap(dataMap *dataMaps, const mxArray *p);
-	pixelColor fetchColorOnePixel(const double *imageData, const int &ind_r, const int &ind_g, const int &ind_b );
+	//pixelColor fetchColorOnePixel(const double *imageData, const int &ind_r, const int &ind_g, const int &ind_b );
 
 	void leftToRight();
 	void findRange(const double &row, const double &col, double &rowStart, double &rowEnd, double &colStart, double &colEnd, const double &halfWindowSize, const double &w, const double &h);

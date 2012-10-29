@@ -45,8 +45,8 @@ public:
 
 		weight.resize(4);
 		weight[0] = (x_heigh - _pt.at<double>(0)) * (y_heigh - _pt.at<double>(1));
-		weight[1] = (_pt.at<double>(0) - x_low)    * (y_heigh - _pt.at<double>(1));
-		weight[2] = (x_heigh - _pt.at<double>(0)) * ( _pt.at<double>(1) - y_low );
+		weight[1] = (x_heigh - _pt.at<double>(0)) * ( _pt.at<double>(1) - y_low );
+		weight[2] = (_pt.at<double>(0) - x_low)    * (y_heigh - _pt.at<double>(1));		
 		weight[3] = (_pt.at<double>(0) - x_low)    * ( _pt.at<double>(1) - y_low );
 
 		ind_r.resize(4); ind_g.resize(4); ind_b.resize(4);
@@ -180,6 +180,11 @@ public:
 		return p1; 
 	}
 
+	void sqrtRoot()
+	{
+		for(int i = 0; i<3; i++)
+			this->_color.at<double>(i) = sqrt(this->_color.at<double>(i));
+	}
 
 };
 

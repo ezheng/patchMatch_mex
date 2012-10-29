@@ -16,7 +16,8 @@ link_directories(${MATLAB_LIB_PATH}
 add_library(patchMatch SHARED ${CMAKE_SOURCE_DIR}/mexFunction.def
 			src/parseParms.h src/parseParms.cpp
 			src/patchMatch.cpp
-			src/dataType.h   src/dataType.cpp)
+			src/dataType.h   src/dataType.cpp
+			src/utility.h)
 						  
 target_link_libraries(patchMatch 
 						libmex.lib libmx.lib

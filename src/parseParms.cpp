@@ -1,5 +1,10 @@
 #include "parseParms.h"
 #include <assert.h>
+#include "utility.h"
+
+#define _SECURE_SCL 0
+#define _HAS_ITERATOR_DEBUGGING 0
+
 
 #define UNSET -2.0
 
@@ -85,6 +90,8 @@ void patchMatch::findRange(const double &row, const double &col, double &rowStar
 
 void patchMatch::findPixelPos(std::vector<pixelPos> &pixelPostions , const double &rowStart, const double &rowEnd, const double &colStart, const double &colEnd)
 {
+	int numOfPixels = static_cast<int>((rowEnd - rowStart +1) * (colEnd - colStart + 1));
+	pixelPostions.reserve(numOfPixels);
 	for(double i = rowStart; i<=rowEnd; i++)
 	{
 		for(double j = colStart; j<=colEnd; j++)
@@ -101,7 +108,9 @@ void patchMatch::findPixelColors(std::vector<pixelColor> &pColors, const std::ve
 	{
 		double ind_r, ind_g, ind_b;
 		pPos[i].sub2Idx(ind_r, ind_g, ind_b, img.h, img.w);
-		pColors.push_back( fetchColorOnePixel(img.imageData, static_cast<int>(ind_r), static_cast<int>(ind_g), static_cast<int>(ind_b)));
+		//pColors.push_back( fetchColorOnePixel(img.imageData, static_cast<int>(ind_r), static_cast<int>(ind_g), static_cast<int>(ind_b)));
+		pColors.push_back( pixelColor(img.imageData[static_cast<int>(ind_r)], img.imageData[static_cast<int>(ind_g)], img.imageData[static_cast<int>(ind_b)]) );
+			//imageData[ind_r], imageData[ind_g], imageData[ind_b]
 	}
 
 }
@@ -118,17 +127,20 @@ void patchMatch::findPixelColorsInterpolation(std::vector<pixelColor> &pColors, 
 	{
 		pixelColor pCol(0.0, 0.0, 0.0);
 		
-		if( pPos[i]._pt.at<double>(0) < 0.5 || pPos[i]._pt.at<double>(0) > pPos[i]._pt.cols-0.5 ||
-			pPos[i]._pt.at<double>(1) < 0.5 || pPos[i]._pt.at<double>(0) > pPos[i]._pt.rows-0.5 )
+		if( pPos[i]._pt.at<double>(0) < 0.5 || pPos[i]._pt.at<double>(0) > img.w - 0.5 ||
+			pPos[i]._pt.at<double>(1) < 0.5 || pPos[i]._pt.at<double>(0) > img.h - 0.5 )
 		{
 			pCol._color.at<double>(3) = 1.0;			
 		}
 		else
 		{
 			pPos[i].sub2Idx(weight, ind_r, ind_g, ind_b, img.h, img.w);				
+			//double b[4];
 			for(int j = 0; j<ind_r.size(); j++)
 			{
-				pCol += fetchColorOnePixel(img.imageData, static_cast<int>(ind_r[j]), static_cast<int>(ind_g[j]), static_cast<int>(ind_b[j])) *  weight[j] ;	// do interpolation
+				//b[j] = img.imageData[static_cast<int>(ind_b[j])];
+				pixelColor pcolor = pixelColor(img.imageData[static_cast<int>(ind_r[j])], img.imageData[static_cast<int>(ind_g[j])], img.imageData[static_cast<int>(ind_b[j])] );
+				pCol += pcolor * weight[j];
 			}
 		}		
 		pColors.push_back(pCol);
@@ -136,11 +148,14 @@ void patchMatch::findPixelColorsInterpolation(std::vector<pixelColor> &pColors, 
 }
 
 
-pixelColor patchMatch::fetchColorOnePixel(const double *imageData, const int &ind_r, const int &ind_g, const int &ind_b )
-{
-	return pixelColor(imageData[ind_r], imageData[ind_g], imageData[ind_b]);		
-	
-}
+//pixelColor patchMatch::fetchColorOnePixel(const double *imageData, const int &ind_r, const int &ind_g, const int &ind_b )
+//{
+//	double a = imageData[ind_r];
+//	double b = imageData[ind_g];
+//	double c = imageData[ind_b];
+//	return pixelColor(imageData[ind_r], imageData[ind_g], imageData[ind_b]);		
+//	
+//}
 
 void patchMatch::updateDistribution(const pixelPos &formerPixel, const pixelPos &currentPixel, dataMap& distributionMap)
 {	
@@ -298,15 +313,18 @@ double patchMatch::calculateNCC(const std::vector<pixelColor> &otherImagePixelCo
 		otherImageSigma += (otherImageSubtracted[i] * otherImageSubtracted[i]);
 		refImageSigma += (refImageSubtracted[i] * refImageSubtracted[i]);
 	}
+	
 	otherImageSigma = otherImageSigma * (1/ static_cast<double>(numOfValidPixels));
-	refImageSigma = refImageSigma * (1/ static_cast<double>(numOfValidPixels));
+	otherImageSigma.sqrtRoot();
+	refImageSigma = refImageSigma * (1/ static_cast<double>(numOfValidPixels));	
+	refImageSigma.sqrtRoot();
 
-	double cost_rgb[3];
+	double cost_rgb[3] = {0};
 	for(int i = 0; i<3; i++)
 	{
 		for(int j = 0; j< numOfValidPixels; j++)
 		{
-			cost_rgb[i] = otherImageSubtracted[j]._color.at<double>(i) * refImageSubtracted[j]._color.at<double>(i) / otherImageSigma._color.at<double>(i) / refImageSigma._color.at<double>(i);
+			cost_rgb[i] += (otherImageSubtracted[j]._color.at<double>(i) * refImageSubtracted[j]._color.at<double>(i) / otherImageSigma._color.at<double>(i) / refImageSigma._color.at<double>(i));
 		}
 	}
 	double cost = (cost_rgb[0] + cost_rgb[1] + cost_rgb[2])/3.0f/static_cast<double>(numOfValidPixels);
@@ -321,23 +339,29 @@ void patchMatch:: leftToRight()
 
 	size_t numOfImages = _imgStruct_2.size();
 
-	for(double row = 0; row < ref_h; row+=1.0)
+	//for(double row = 249; row <= 249; row += 1.0)
+	for(double row = 100; row < 101; row += 1.0)
 	{
-		mexPrintf("%d is started\n", row);
-		for(double col = 1; col < ref_w; col+=1.0)
+		double totalTime = 0;
+
+		mexPrintf("%f is started\n", row);
+		//for(double col = 299; col <= 299; col+=1.0)
+		for(double col = 1; col < ref_w; col +=1.0)
 		{			
 			//1) find the start and end of the row and col (start smaller than end)
 			double colStart; double colEnd;
 			double rowStart; double rowEnd;
-			findRange(row, col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	// though these values are double type, but it is integer
-
-			//2) find all the pixels in the current image
+			
+			//2)
+			
+			
+			findRange( row, col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
 			int numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
 			std::vector<pixelPos> refPixelPos;
 			refPixelPos.reserve(numOfPixels);
 			findPixelPos(refPixelPos, rowStart, rowEnd, colStart, colEnd);	// 
-
-			//3) find the color in reference image given pixels
+			
+			//3) find the color in reference image given pixels			
 			std::vector<pixelColor> refPixelColor;
 			refPixelColor.reserve(numOfPixels);
 			findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0]);	// within this function, it should allow non-integer pixel positions
@@ -353,32 +377,40 @@ void patchMatch:: leftToRight()
 			depth[2] = _depthMaps.data[currentPixelIdx];			
 			//5) draw samples and update the image ID distribution
 			// draw samples:
-			std::vector<int> imageLayerId[2]; 
-			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);
-			// update:
-			//updateDistribution(formerPixel, currentPixel, _distributionMap);
-			// draw samples				
-			drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);
+			std::vector<int> imageLayerId[2]; 			
+
+			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
+			drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);			
 
 			//6) transforming the pixels to the other image (depth given, image id is given) and find the color for given pixels. calculate costs
 			std::vector<double> cost; 
-			cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);			
+			cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
+
+			timer tt;
+			tt.startTimer();
+
 			for(int i = 0; i< 3; i++)
 			{
-				for(int j = 0; j <imageLayerId->size(); j++ )
+				for(int j = 0; j < 2; j++ )
+				{				
+
 					for(int k = 0; k < imageLayerId[j].size(); k++ )
-					{
+					{						
 						if(cost[i + 3 * imageLayerId[j][k]] == UNSET)
 						{
 							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, imageLayerId[j][k], depth[i]); // cost is the output
-						}
+						}	
 					}
+				}
 			}
+			tt.printTime();
+			totalTime += tt.duration;
+
 			//7) based on the cost, VOTE which depth to use. and then save the depth
 			std::vector<bool> testedIdSet;
 			int bestDepthId = findBestDepth_average(cost, testedIdSet);
-			_depthMaps.data[currentPixelIdx] = depth[bestDepthId];
-			
+			_depthMaps.data[currentPixelIdx] = depth[bestDepthId];			
+
 			//8) test the untested sample
 			std::vector<double> costWithBestDepth; costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);
 			for(int j = 0; j<testedIdSet.size(); j++)
@@ -394,6 +426,7 @@ void patchMatch:: leftToRight()
 			//9) update the distribution
 			UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap);
 		}
+		printf("Total time is: %f", totalTime);
 	}
 }
 
