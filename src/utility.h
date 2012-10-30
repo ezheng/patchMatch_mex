@@ -16,17 +16,31 @@ private:
 		duration = ( std::clock() - t ) / (double) CLOCKS_PER_SEC;
 	}
 
-public:
-	double duration;
 	void startTimer()
 	{
 		t = std::clock();
-	}	
+	}
 
-	void printTime()
+	
+
+public:
+	double duration;
+	double totalTime;
+	timer()
 	{
+		totalTime = 0;
+	}		
+
+	//void printTime()
+	//{
+	//	endTimer();
+	//	//printf( " It takes: %f \n", duration );
+	//}
+
+	void calculateTotalTime()
+	{		
 		endTimer();
-		printf( " It takes: %f \n", duration );
+		totalTime += duration;
 	}
 
 };

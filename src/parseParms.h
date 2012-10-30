@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <opencv/cxcore.h>
+#include "utility.h"
 
 typedef struct 
 {
@@ -14,6 +15,7 @@ typedef struct
 	double h;
 	double w;
 	double d;
+	double arraySize;
 }dataMap ;
 
 
@@ -30,12 +32,20 @@ public:
 	double _far;
 	int _numOfSamples;
 	double _sigma;
+	timer _tt;
+
+	//double _totalTime;
 
 	patchMatch(const mxArray *prhs[])
 	{
 		
 		parseImageStructure(&_imgStruct_1, prhs[0]);		// image structure 1
 		parseImageStructure(&_imgStruct_2, prhs[1]);		// image structure 2
+		for(int i = 0; i<_imgStruct_2.size(); i++)
+		{
+			_imgStruct_2[i].init_relative(_imgStruct_1[0]);
+		}
+
 		parseDataMap(&_depthMaps, prhs[2]);		
 		parseDataMap(&_depthRandomMaps, prhs[3]);
 		parseDataMap(&_distributionMap, prhs[4]);
@@ -44,6 +54,8 @@ public:
 		_far = 12;
 		_numOfSamples = 3;
 		_sigma = 0.2;
+
+		//_totalTime = 0;
 	}
 
 	void parseImageStructure(std::vector<ImageStruct> *allImgStruct, const mxArray *p);
@@ -51,11 +63,18 @@ public:
 	//pixelColor fetchColorOnePixel(const double *imageData, const int &ind_r, const int &ind_g, const int &ind_b );
 
 	void leftToRight();
-	void findRange(const double &row, const double &col, double &rowStart, double &rowEnd, double &colStart, double &colEnd, const double &halfWindowSize, const double &w, const double &h);
-	void findPixelPos(std::vector<pixelPos> &pixelPos , const double &rowStart, const double &rowEnd, const double &colStart, const double &colEnd);
-	void findPixelColors(std::vector<pixelColor> &pColors, const std::vector<pixelPos> &pPos, ImageStruct &img);
+	inline void findRange(const double &row, const double &col, double &rowStart, double &rowEnd, double &colStart, double &colEnd, const double &halfWindowSize, const double &w, const double &h)
+	{
+		rowStart = row - halfWindowSize >= 0 ? (row - halfWindowSize) : 0;
+		rowEnd = row + halfWindowSize <= h-1 ? (row + halfWindowSize) : h-1;
+		colStart = col - halfWindowSize >= 0 ? (col - halfWindowSize) : 0;
+		colEnd = col + halfWindowSize <= w-1 ? (col + halfWindowSize) : w-1;
+	}
+	
+	void findPixelPos(pixelPos *pixelPostions, const int &numOfPixels, const double &rowStart, const double &rowEnd, const double &colStart, const double &colEnd);
+	void findPixelColors(std::vector<pixelColor> &pColors, pixelPos *pPos, ImageStruct &img, const int &numOfPixels);
 
-	void findPixelColorsInterpolation(std::vector<pixelColor> &pColors, const std::vector<pixelPos> &pPos, ImageStruct &img);
+	void findPixelColorsInterpolation(std::vector<pixelColor> &pColors, const std::vector<pixelPos> &pPos, ImageStruct &img, const int& numOfPixels);
 
 	void updateDistribution(const pixelPos &formerPixel, const pixelPos &currentPixel, dataMap& distributionMap);
 
@@ -65,10 +84,11 @@ public:
 	void normalizeDistribution(std::vector<double> &distribution);
 
 	void computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, 
-		const std::vector<pixelPos> &refPixelPos, int imageId, double depth);
-	void getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, const std::vector<pixelPos> &refPixelPos, double depth, int imageId);
-	double calculateNCC(const std::vector<pixelColor> &otherImagePixelColor, const std::vector<pixelColor> &refPixelColor);
-	void UpdateDistributionMap(const std::vector<double> &cost, const pixelPos &currentPos, const dataMap & distributionMap);
+		/*const std::vector<pixelPos> &*/ const pixelPos* refPixelPos, int imageId, const double &depth,  const int& numOfPixels);
+	void getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos> &*/const pixelPos* refPixelPos , double depth, int imageId, const int& numOfPixels);
+	
+	double calculateNCC(const std::vector<pixelColor> &otherImagePixelColor, const std::vector<pixelColor> &refPixelColor, const int &numOfPixels);
+	void UpdateDistributionMap(const std::vector<double> &cost, const pixelPos &currentPos, const dataMap & distributionMap, std::vector<double> &prob);
 	int findBestDepth_average(const std::vector<double> &cost, std::vector<bool> &testedIdSet);
 
 };

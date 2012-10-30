@@ -2,8 +2,8 @@
 #include <assert.h>
 #include "utility.h"
 
-#define _SECURE_SCL 0
-#define _HAS_ITERATOR_DEBUGGING 0
+//#define _SECURE_SCL 0
+//#define _HAS_ITERATOR_DEBUGGING 0
 
 
 #define UNSET -2.0
@@ -77,47 +77,56 @@ void patchMatch::parseDataMap(dataMap *dataMaps, const mxArray *p)
 		dataMaps->d = static_cast<double>(sz[2]);
 	else
 		dataMaps->d = 1;
+
+	dataMaps->arraySize = dataMaps->h * dataMaps->w;
 	
 }
 
-void patchMatch::findRange(const double &row, const double &col, double &rowStart, double &rowEnd, double &colStart, double &colEnd, const double &halfWindowSize, const double &w, const double &h)
-{
-	rowStart = row - halfWindowSize >= 0 ? (row - halfWindowSize) : 0;
-	rowEnd = row + halfWindowSize <= h-1 ? (row + halfWindowSize) : h-1;
-	colStart = col - halfWindowSize >= 0 ? (col - halfWindowSize) : 0;
-	colEnd = col + halfWindowSize <= w-1 ? (col + halfWindowSize) : w-1;
-}
+//void patchMatch::findRange(const double &row, const double &col, double &rowStart, double &rowEnd, double &colStart, double &colEnd, const double &halfWindowSize, const double &w, const double &h)
+//{
+//	rowStart = row - halfWindowSize >= 0 ? (row - halfWindowSize) : 0;
+//	rowEnd = row + halfWindowSize <= h-1 ? (row + halfWindowSize) : h-1;
+//	colStart = col - halfWindowSize >= 0 ? (col - halfWindowSize) : 0;
+//	colEnd = col + halfWindowSize <= w-1 ? (col + halfWindowSize) : w-1;
+//}
 
-void patchMatch::findPixelPos(std::vector<pixelPos> &pixelPostions , const double &rowStart, const double &rowEnd, const double &colStart, const double &colEnd)
+void patchMatch::findPixelPos(pixelPos *pixelPostions, const int &numOfPixels, const double &rowStart, const double &rowEnd, const double &colStart, const double &colEnd)
 {
-	int numOfPixels = static_cast<int>((rowEnd - rowStart +1) * (colEnd - colStart + 1));
-	pixelPostions.reserve(numOfPixels);
+	//int numOfPixels = static_cast<int>((rowEnd - rowStart +1) * (colEnd - colStart + 1));
+	//pixelPostions.reserve(numOfPixels);
+	int count = 0;
 	for(double i = rowStart; i<=rowEnd; i++)
 	{
 		for(double j = colStart; j<=colEnd; j++)
 		{
-			pixelPostions.push_back(pixelPos(j, i));			
+			//pixelPostions.push_back(pixelPos(j, i));			
+			pixelPostions[count]._pt.at<double>(0) = j;
+			pixelPostions[count]._pt.at<double>(1) = i;
+			count++;
 		}
 	}
 }
 
-void patchMatch::findPixelColors(std::vector<pixelColor> &pColors, const std::vector<pixelPos> &pPos, ImageStruct &img)
+void patchMatch::findPixelColors(std::vector<pixelColor> &pColors, pixelPos *pPos, ImageStruct &img, const int &numOfPixels)
 {
-	size_t numOfPixels = pPos.size();
+	//size_t numOfPixels = pPos.size();
 	for(int i = 0; i < numOfPixels; i++)
 	{
 		double ind_r, ind_g, ind_b;
-		pPos[i].sub2Idx(ind_r, ind_g, ind_b, img.h, img.w);
+		pPos[i].sub2Idx(ind_r, ind_g, ind_b, img.h, img.arraySize);
 		//pColors.push_back( fetchColorOnePixel(img.imageData, static_cast<int>(ind_r), static_cast<int>(ind_g), static_cast<int>(ind_b)));
-		pColors.push_back( pixelColor(img.imageData[static_cast<int>(ind_r)], img.imageData[static_cast<int>(ind_g)], img.imageData[static_cast<int>(ind_b)]) );
-			//imageData[ind_r], imageData[ind_g], imageData[ind_b]
+		//pColors.push_back( pixelColor(img.imageData[static_cast<int>(ind_r)], img.imageData[static_cast<int>(ind_g)], img.imageData[static_cast<int>(ind_b)]) );
+		//pColors.push_back( pixelColor(img.imageData[static_cast<int>(ind_r)], img.imageData[static_cast<int>(ind_g)], img.imageData[static_cast<int>(ind_b)]) );
+		pColors[i]._color.at<double>(0) = img.imageData[static_cast<int>(ind_r)];
+		pColors[i]._color.at<double>(1) = img.imageData[static_cast<int>(ind_g)];
+		pColors[i]._color.at<double>(2) = img.imageData[static_cast<int>(ind_b)];
+		//imageData[ind_r], imageData[ind_g], imageData[ind_b]
 	}
-
 }
 
-void patchMatch::findPixelColorsInterpolation(std::vector<pixelColor> &pColors, const std::vector<pixelPos> &pPos, ImageStruct &img)
+void patchMatch::findPixelColorsInterpolation(std::vector<pixelColor> &pColors, const std::vector<pixelPos> &pPos, ImageStruct &img, const int& numOfPixels)
 {
-	size_t numOfPixels = pPos.size();
+	//size_t numOfPixels = pPos.size();
 	std::vector<double> ind_r;
 	std::vector<double> ind_g;
 	std::vector<double> ind_b;
@@ -128,13 +137,13 @@ void patchMatch::findPixelColorsInterpolation(std::vector<pixelColor> &pColors, 
 		pixelColor pCol(0.0, 0.0, 0.0);
 		
 		if( pPos[i]._pt.at<double>(0) < 0.5 || pPos[i]._pt.at<double>(0) > img.w - 0.5 ||
-			pPos[i]._pt.at<double>(1) < 0.5 || pPos[i]._pt.at<double>(0) > img.h - 0.5 )
+			pPos[i]._pt.at<double>(1) < 0.5 || pPos[i]._pt.at<double>(1) > img.h - 0.5 )
 		{
 			pCol._color.at<double>(3) = 1.0;			
 		}
 		else
 		{
-			pPos[i].sub2Idx(weight, ind_r, ind_g, ind_b, img.h, img.w);				
+			pPos[i].sub2Idx(weight, ind_r, ind_g, ind_b, img.h, img.arraySize);				
 			//double b[4];
 			for(int j = 0; j<ind_r.size(); j++)
 			{
@@ -162,8 +171,8 @@ void patchMatch::updateDistribution(const pixelPos &formerPixel, const pixelPos 
 	// update distribution for each layer
 	for(int layer = 0; layer < distributionMap.d; layer++)
 	{
-		double curIdx = currentPixel.sub2Idx(distributionMap.h, distributionMap.w, layer );
-		double formerIdx = formerPixel.sub2Idx(distributionMap.h, distributionMap.w, layer);
+		double curIdx = currentPixel.sub2Idx(distributionMap.h, distributionMap.arraySize, layer );
+		double formerIdx = formerPixel.sub2Idx(distributionMap.h, distributionMap.arraySize, layer);
 		distributionMap.data[static_cast<int>(curIdx)] += distributionMap.data[static_cast<int>(formerIdx)];
 		distributionMap.data[static_cast<int>(curIdx)] /= 2.0f;
 	}
@@ -192,8 +201,8 @@ void patchMatch::drawSamples(const std::vector<double> &distribution, int numOfS
 	{
 		accumulated[i] = accumulated[i-1] + distribution[i];
 	}
-	// draw samples based on
-		
+	// draw samples based on distribution
+	samples.clear();	
 	for(int i = 0; i<numOfSamples; i++)
 	{
 		double rdNum = rand()/static_cast<double>(RAND_MAX);
@@ -227,7 +236,7 @@ void patchMatch::drawSamples(const dataMap &distributionMap, std::vector<int> &i
 	distribution.resize(static_cast<int>(distributionMap.d));
 	for(int i = 0; i<distribution.size(); i++)
 	{
-		distribution[i] = _distributionMap.data[static_cast<int>( curPixel.sub2Idx(distributionMap.h, distributionMap.w, i))];
+		distribution[i] = _distributionMap.data[static_cast<int>( curPixel.sub2Idx(distributionMap.h, distributionMap.arraySize, i))];
 	}
 	// normalize distribution:
 	// normalizeDistribution(distribution);
@@ -235,46 +244,55 @@ void patchMatch::drawSamples(const dataMap &distributionMap, std::vector<int> &i
 }
 
 void patchMatch:: computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, 
-	const std::vector<pixelPos> &refPixelPos, int imageId, double depth)
+	/*const std::vector<pixelPos> &refPixelPos*/const pixelPos* refPixelPos , int imageId, const double &depth, const int& numOfPixels)
 {
-	int numOfPixels = static_cast<int>(refPixelPos.size());	
-	std::vector<pixelPos> otherImagePixelPos;	
-	getOtherImagePixelPos(otherImagePixelPos, refPixelPos, depth, imageId);
+	//int numOfPixels = static_cast<int>(refPixelPos.size());	
+	std::vector<pixelPos> otherImagePixelPos;	 
+	getOtherImagePixelPos(otherImagePixelPos, refPixelPos, depth, imageId, numOfPixels);
 	std::vector<pixelColor> otherImagePixelColor;
-	findPixelColorsInterpolation(otherImagePixelColor, otherImagePixelPos, _imgStruct_2[imageId]);	// 
-	
+	findPixelColorsInterpolation(otherImagePixelColor, otherImagePixelPos, _imgStruct_2[imageId], numOfPixels);	// 	
 	// calculate the cost using 1) refPixelColor, and 2) 
+	//timer tt;
+	cost = calculateNCC( otherImagePixelColor, refPixelColor, numOfPixels);
 	
-	cost = calculateNCC( otherImagePixelColor, refPixelColor);
+	//_totalTime += tt.duration;
 }
 
-void patchMatch::getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, const std::vector<pixelPos> &refPixelPos, double depth, int imageId)
+void patchMatch::getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos>*/ const pixelPos* refPixelPos, double depth, int imageId, const int& numOfPixels)
 {
-	cv::Mat normalVector = (cv::Mat_<double>(1,3) << 0, 0, 1);
+	//cv::Mat normalVector = (cv::Mat_<double>(1,3) << 0, 0, 1);
+	//cv::Mat opencv_R = _imgStruct_2[imageId].opencv_R *_imgStruct_1[0].opencv_inverseR ;
+	//cv::Mat opencv_T = _imgStruct_2[imageId].opencv_R * (_imgStruct_2[imageId].opencv_C - _imgStruct_1[0].opencv_C);	
+	//cv::Mat H = _imgStruct_2[imageId].opencv_K * (opencv_R - opencv_T * normalVector / depth) * _imgStruct_1[0].opencv_inverseK;
+	//cv::Mat H = _imgStruct_2[imageId].opencv_K * (_imgStruct_2[imageId].opencv_relative_R - _imgStruct_2[imageId].opencv_relative_T * normalVector / depth) * _imgStruct_1[0].opencv_inverseK;
+	cv::Mat H = _imgStruct_2[imageId].H1 - (_imgStruct_2[imageId].H2/depth);
+	cv::Mat HH = _imgStruct_2[imageId].H2/depth;
 
-	cv::Mat opencv_R = _imgStruct_2[imageId].opencv_R *_imgStruct_1[0].opencv_inverseR ;
-	cv::Mat opencv_T = _imgStruct_2[imageId].opencv_R * (_imgStruct_2[imageId].opencv_C - _imgStruct_1[0].opencv_C);	
-	cv::Mat H = _imgStruct_2[imageId].opencv_K * (opencv_R - opencv_T * normalVector / depth) * _imgStruct_1[0].opencv_inverseK;
+	//int numOfPixels = static_cast<int>(refPixelPos.size());
+	//otherImagePixelPos.reserve(numOfPixels);
 
-	int numOfPixels = static_cast<int>(refPixelPos.size());
-	otherImagePixelPos.reserve(numOfPixels);
+	otherImagePixelPos.resize(numOfPixels);
 	for(int i = 0; i<numOfPixels; i++)
 	{
-		pixelPos refImageOnePixel(refPixelPos[i]._pt.at<double>(0) + 0.5, refPixelPos[i]._pt.at<double>(1) + 0.5 );
-		cv::Mat newPixel = H * refImageOnePixel._pt;
+		//pixelPos refImageOnePixel(refPixelPos[i]._pt.at<double>(0) + 0.5, refPixelPos[i]._pt.at<double>(1) + 0.5 );
+		//pixelPos otherImageOnePixel(refPixelPos[i]._pt.at<double>(0) + 0.5, refPixelPos[i]._pt.at<double>(1) + 0.5 );
+		otherImagePixelPos[i]._pt.at<double>(0) = refPixelPos[i]._pt.at<double>(0) + 0.5;
+		otherImagePixelPos[i]._pt.at<double>(1) = refPixelPos[i]._pt.at<double>(1) + 0.5;
+		otherImagePixelPos[i]._pt = H * otherImagePixelPos[i]._pt;
+		otherImagePixelPos[i]._pt /= otherImagePixelPos[i]._pt.at<double>(2);
 		// normalize:
-		newPixel = newPixel/newPixel.at<double>(2);
-
-		otherImagePixelPos.push_back(pixelPos(newPixel)); 
+		//newPixel = newPixel/newPixel.at<double>(2);
+		//otherImagePixelPos.push_back(pixelPos(newPixel)); 
+		//otherImagePixelPos.push_back(otherImageOnePixel);
 	}
 
 }
 
 
-double patchMatch::calculateNCC(const std::vector<pixelColor> &otherImagePixelColor, const std::vector<pixelColor> &refPixelColor)
+double patchMatch::calculateNCC(const std::vector<pixelColor> &otherImagePixelColor, const std::vector<pixelColor> &refPixelColor, const int& numOfPixels)
 {
-	assert(otherImagePixelColor.size() == refPixelColor.size());
-	int numOfPixels = static_cast<int>(otherImagePixelColor.size());
+	//assert(otherImagePixelColor.size() == refPixelColor.size());
+	//int numOfPixels = static_cast<int>(otherImagePixelColor.size());
 	
 	pixelColor otherImageMean(0., 0., 0.);
 	pixelColor refImageMean(0.,0.,0.);	
@@ -283,8 +301,8 @@ double patchMatch::calculateNCC(const std::vector<pixelColor> &otherImagePixelCo
 	{
 		if(otherImagePixelColor[i]._color.at<double>(3) != 1.0f)
 		{
-			otherImageMean += otherImagePixelColor[i];
-			refImageMean += refPixelColor[i];
+			otherImageMean._color += otherImagePixelColor[i]._color;
+			refImageMean._color += refPixelColor[i]._color;
 			numOfValidPixels += 1;			
 		}		
 	}
@@ -292,8 +310,11 @@ double patchMatch::calculateNCC(const std::vector<pixelColor> &otherImagePixelCo
 	{
 		return -1;	
 	}
-	otherImageMean = otherImageMean * (1/ static_cast<double>(numOfValidPixels));
-	refImageMean = refImageMean * (1/ static_cast<double>(numOfPixels));
+	//otherImageMean = otherImageMean * (1/ static_cast<double>(numOfValidPixels));
+	//refImageMean = refImageMean * (1/ static_cast<double>(numOfPixels));
+	otherImageMean._color /= static_cast<double>(numOfValidPixels);
+	refImageMean._color /= static_cast<double>(numOfValidPixels);
+
 	// 
 	std::vector<pixelColor> otherImageSubtracted;
 	std::vector<pixelColor> refImageSubtracted;
@@ -314,9 +335,9 @@ double patchMatch::calculateNCC(const std::vector<pixelColor> &otherImagePixelCo
 		refImageSigma += (refImageSubtracted[i] * refImageSubtracted[i]);
 	}
 	
-	otherImageSigma = otherImageSigma * (1/ static_cast<double>(numOfValidPixels));
+	otherImageSigma._color /= static_cast<double>(numOfValidPixels);
 	otherImageSigma.sqrtRoot();
-	refImageSigma = refImageSigma * (1/ static_cast<double>(numOfValidPixels));	
+	refImageSigma._color /= static_cast<double>(numOfValidPixels);	
 	refImageSigma.sqrtRoot();
 
 	double cost_rgb[3] = {0};
@@ -339,101 +360,117 @@ void patchMatch:: leftToRight()
 
 	size_t numOfImages = _imgStruct_2.size();
 
-	//for(double row = 249; row <= 249; row += 1.0)
-	for(double row = 100; row < 101; row += 1.0)
+	for(double row = 300; row < 310; row += 1.0)
+	//for(double row = 1; row < ref_h; row += 1.0)
 	{
-		double totalTime = 0;
-
-		mexPrintf("%f is started\n", row);
+		//double totalTime = 0;
+		//mexPrintf("%f is started\n", row);
 		//for(double col = 299; col <= 299; col+=1.0)
+		int maxNumOfPixels = static_cast<int>(pow(_halfWindowSize * 2 + 1, 2));
+		//std::vector<pixelPos> refPixelPos;
+		//refPixelPos.resize(maxNumOfPixels);
+		pixelPos *refPixelPos = new pixelPos[maxNumOfPixels];
+
+		std::vector<pixelColor> refPixelColor;
+		refPixelColor.resize(maxNumOfPixels);
+		pixelPos formerPixel;
+		pixelPos currentPixel;
+		int formerPixelIdx;
+		int currentPixelIdx;
+		double depth[3];	// three candidate depth			
+		std::vector<int> imageLayerId[2]; 			
+		std::vector<double> cost; 
+		cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
+		double colStart; double colEnd;
+		double rowStart; double rowEnd;	
+		int numOfPixels;
+		std::vector<double> costWithBestDepth; 
+		costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);
+		std::vector<bool> testedIdSet;
+		testedIdSet.resize(static_cast<int>( _depthMaps.d));
+		int bestDepthId;
+		std::vector<double> prob; 
+		prob.resize(static_cast<int>( _distributionMap.d));
+		
 		for(double col = 1; col < ref_w; col +=1.0)
 		{			
 			//1) find the start and end of the row and col (start smaller than end)
-			double colStart; double colEnd;
-			double rowStart; double rowEnd;
-			
-			//2)
-			
-			
 			findRange( row, col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
-			int numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
-			std::vector<pixelPos> refPixelPos;
-			refPixelPos.reserve(numOfPixels);
-			findPixelPos(refPixelPos, rowStart, rowEnd, colStart, colEnd);	// 
+
+			//2)						
+			numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
+			findPixelPos(refPixelPos, numOfPixels ,rowStart, rowEnd, colStart, colEnd);	// 
 			
 			//3) find the color in reference image given pixels			
-			std::vector<pixelColor> refPixelColor;
-			refPixelColor.reserve(numOfPixels);
-			findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0]);	// within this function, it should allow non-integer pixel positions
+			//std::vector<pixelColor> refPixelColor;
+			//refPixelColor.reserve(numOfPixels);
+			findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0], numOfPixels);	// within this function, it should allow non-integer pixel positions
 
 			//4) draw random depth value, and image id
-			pixelPos formerPixel(col-1, row);   // ***
-			pixelPos currentPixel(col, row);
-			int formerPixelIdx = static_cast<int>(formerPixel.sub2Idx(_depthMaps.h));
-			int currentPixelIdx = static_cast<int>(currentPixel.sub2Idx(_depthMaps.h));
-			double depth[3];	// three candidate depth			
+			//pixelPos formerPixel(col-1, row);   // ***
+			//pixelPos currentPixel(col, row);
+			formerPixel._pt.at<double>(0) = col - 1;  formerPixel._pt.at<double>(1) = row; 
+			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = row; 
+			
+			formerPixelIdx = static_cast<int>(formerPixel.sub2Idx(_depthMaps.h));
+			currentPixelIdx = static_cast<int>(currentPixel.sub2Idx(_depthMaps.h));
+						
 			depth[0] = _depthMaps.data[formerPixelIdx];
 			depth[1] = _depthRandomMaps.data[currentPixelIdx];
-			depth[2] = _depthMaps.data[currentPixelIdx];			
+			depth[2] = _depthMaps.data[currentPixelIdx];		
+
 			//5) draw samples and update the image ID distribution
 			// draw samples:
-			std::vector<int> imageLayerId[2]; 			
-
 			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
-			drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);			
+			drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
+			//imageLayerId[0][0] = 3;
 
 			//6) transforming the pixels to the other image (depth given, image id is given) and find the color for given pixels. calculate costs
-			std::vector<double> cost; 
-			cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
-
-			timer tt;
-			tt.startTimer();
+			//std::vector<double> cost; 
+			//cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
+			std::fill(cost.begin(), cost.end(), UNSET);
 
 			for(int i = 0; i< 3; i++)
 			{
 				for(int j = 0; j < 2; j++ )
-				{				
-
+				{
 					for(int k = 0; k < imageLayerId[j].size(); k++ )
 					{						
 						if(cost[i + 3 * imageLayerId[j][k]] == UNSET)
 						{
-							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, imageLayerId[j][k], depth[i]); // cost is the output
+							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, imageLayerId[j][k], depth[i], numOfPixels); // cost is the output
 						}	
 					}
 				}
 			}
-			tt.printTime();
-			totalTime += tt.duration;
-
-			//7) based on the cost, VOTE which depth to use. and then save the depth
-			std::vector<bool> testedIdSet;
-			int bestDepthId = findBestDepth_average(cost, testedIdSet);
-			_depthMaps.data[currentPixelIdx] = depth[bestDepthId];			
+			//7) based on the cost, VOTE which depth to use. and then save the depth			
+			bestDepthId = findBestDepth_average(cost, testedIdSet);
+			_depthMaps.data[currentPixelIdx] = depth[bestDepthId];
 
 			//8) test the untested sample
-			std::vector<double> costWithBestDepth; costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);
+			/*std::vector<double> costWithBestDepth; 
+			costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);*/
 			for(int j = 0; j<testedIdSet.size(); j++)
 			{
 				if(testedIdSet[j] == false)
 				{					
-					computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, j, depth[bestDepthId]); // cost is the output
+					computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, j, depth[bestDepthId], numOfPixels); // cost is the output
 				}
 				else
 					costWithBestDepth[j] = cost[j*3 + bestDepthId] ;
 			}		
 
 			//9) update the distribution
-			UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap);
-		}
-		printf("Total time is: %f", totalTime);
+			UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap, prob);
+		}		
+		delete []refPixelPos;
 	}
 }
 
-void patchMatch:: UpdateDistributionMap(const std::vector<double> &cost, const pixelPos &currentPos, const dataMap & distributionMap)
+void patchMatch:: UpdateDistributionMap(const std::vector<double> &cost, const pixelPos &currentPos, const dataMap & distributionMap, std::vector<double> &prob)
 {
-	std::vector<double> prob;
-	prob.resize(cost.size());
+	//std::vector<double> prob;
+	//prob.resize(cost.size());
 	for(int i = 0; i<cost.size(); i++)
 	{
 		prob[i] = exp(-0.5 * (1-cost[i]) * (1-cost[i])/(_sigma * _sigma));
@@ -445,7 +482,7 @@ void patchMatch:: UpdateDistributionMap(const std::vector<double> &cost, const p
 	}
 	for(int i = 0; i< cost.size(); i++)
 	{
-		distributionMap.data[static_cast<int>(currentPos.sub2Idx(distributionMap.h, distributionMap.w, i))] = prob[i]/sum;
+		distributionMap.data[static_cast<int>(currentPos.sub2Idx(distributionMap.h, distributionMap.arraySize, i))] = prob[i]/sum;
 	}	
 }
 
@@ -459,20 +496,19 @@ int patchMatch::findBestDepth_average(const std::vector<double> &cost, std::vect
 		if(cost[i * 3] != UNSET)
 		{
 			for(int j = 0; j<3; j++)
-				averageCost[j] += cost[i*3 + j];			
+				averageCost[j] += cost[i*3 + j];		
 			numOfImagesTested++;
-			testedIdSet.push_back(true);
+			testedIdSet[i] = true;
 		}
 		else
 		{
-			testedIdSet.push_back(false);
+			testedIdSet[i] = false;
 		}
 	}
 	for(int i = 0; i<3; i++)
 	{
 		averageCost[i] /= numOfImagesTested;
 	}
-
 	double maxCost = averageCost[0];
 	int bestDepthId = 0;
 	for(int i = 1; i<3; i++)

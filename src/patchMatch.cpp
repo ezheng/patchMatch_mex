@@ -16,10 +16,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
 	pm.leftToRight();	
 	
-
+	//printf("Total time is: %f", pm._totalTime);
 	// copy the output:
+
 	plhs[0] = pm._depthMaps.p;
 	plhs[1] = pm._distributionMap.p;
-
 
 }
