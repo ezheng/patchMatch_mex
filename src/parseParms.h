@@ -84,10 +84,11 @@ public:
 	void normalizeDistribution(std::vector<double> &distribution);
 
 	void computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, 
-		/*const std::vector<pixelPos> &*/ const pixelPos* refPixelPos, int imageId, const double &depth,  const int& numOfPixels);
+		/*const std::vector<pixelPos> &*/ const pixelPos* refPixelPos, int imageId, const double &depth,  const int& numOfPixels, std::vector<pixelPos> &otherImagePixelPos, std::vector<pixelColor> &otherImagePixelColor);
+
 	void getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos> &*/const pixelPos* refPixelPos , double depth, int imageId, const int& numOfPixels);
 	
-	double calculateNCC(const std::vector<pixelColor> &otherImagePixelColor, const std::vector<pixelColor> &refPixelColor, const int &numOfPixels);
+	double calculateNCC(std::vector<pixelColor> &otherImagePixelColor, const std::vector<pixelColor> &refPixelColor, const int &numOfPixels);
 	void UpdateDistributionMap(const std::vector<double> &cost, const pixelPos &currentPos, const dataMap & distributionMap, std::vector<double> &prob);
 	int findBestDepth_average(const std::vector<double> &cost, std::vector<bool> &testedIdSet);
 
