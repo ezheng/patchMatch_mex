@@ -13,15 +13,8 @@ private:
     
 	void endTimer()
 	{
-		duration = ( std::clock() - t ) / (double) CLOCKS_PER_SEC;
-	}
-
-	void startTimer()
-	{
-		t = std::clock();
-	}
-
-	
+		duration =  static_cast<double>( std::clock() - t );
+	}	
 
 public:
 	double duration;
@@ -31,11 +24,15 @@ public:
 		totalTime = 0;
 	}		
 
-	//void printTime()
-	//{
-	//	endTimer();
-	//	//printf( " It takes: %f \n", duration );
-	//}
+	void printTime()
+	{		
+		printf( "Total time is: %f \n", totalTime / (double) CLOCKS_PER_SEC );
+	}
+
+	void startTimer()
+	{
+		t = std::clock();
+	}
 
 	void calculateTotalTime()
 	{		

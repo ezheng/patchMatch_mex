@@ -15,6 +15,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	patchMatch pm(prhs);
 
 	pm.leftToRight();	
+	pm._tt.printTime();
 	
 	//printf("Total time is: %f", pm._totalTime);
 	// copy the output:

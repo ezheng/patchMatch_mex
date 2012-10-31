@@ -43,46 +43,100 @@ public:
 		return arraySize * level + _pt.at<double>(0) * height + _pt.at<double>(1);
 	}
 
-	inline void sub2Idx(std::vector<double> &weight, std::vector<double> &ind_r, std::vector<double> &ind_g, std::vector<double> &ind_b, const double &height, const double &arraySize) const
+	inline void sub2Idx(double *weight, double *ind_r, const double &height) const
 	{
 		double x_low = floor( _pt.at<double>(0));
-		double x_heigh = ceil( _pt.at<double>(0));
+		//double x_heigh = ceil( _pt.at<double>(0));
+		double x_heigh = x_low + 1;
 		double y_low = floor( _pt.at<double>(1));
-		double y_heigh = ceil( _pt.at<double>(1));
+		double y_heigh = y_low + 1;
+		//double y_heigh = ceil( _pt.at<double>(1));
 
-		weight.resize(4);
+		//weight.resize(4);
 		weight[0] = (x_heigh - _pt.at<double>(0)) * (y_heigh - _pt.at<double>(1));
 		weight[1] = (x_heigh - _pt.at<double>(0)) * ( _pt.at<double>(1) - y_low );
 		weight[2] = (_pt.at<double>(0) - x_low)    * (y_heigh - _pt.at<double>(1));		
 		weight[3] = (_pt.at<double>(0) - x_low)    * ( _pt.at<double>(1) - y_low );
 
-		ind_r.resize(4); ind_g.resize(4); ind_b.resize(4);
+		//ind_r.resize(4); ind_g.resize(4); ind_b.resize(4);
+		//double ind_r_int, ind_g_int, ind_b_int;
+		//pixelPos pt(x_low, y_low);
+		//pt._pt.at<double>(0) = x_low;	pt._pt.at<double>(1) = y_low;
+		//pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
+		//ind_r[0] = ind_r_int;
+		//ind_g[0] = ind_g_int;
+		//ind_b[0] = ind_b_int;
+		pixelPos pt(x_low, y_low);
+		ind_r[0] = pt.sub2Idx(height);
+		
+		//pt._pt.at<double>(0) = x_low;	pt._pt.at<double>(1) = y_heigh;
+		//pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
+		ind_r[1] = ind_r[0] + 1;		
+
+		//pt._pt.at<double>(0) = x_heigh;	pt._pt.at<double>(1) = y_low;
+		//pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
+		//ind_r[2] = ind_r_int + height;
+		//ind_g[2] = ind_g_int + height;
+		//ind_b[2] = ind_b_int + height;
+		ind_r[2] = ind_r[0] + height;
+		
+		//pt._pt.at<double>(0) = x_heigh;	pt._pt.at<double>(1) = y_heigh;
+		//pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
+		//ind_r[3] = ind_r_int + 1;
+		//ind_g[3] = ind_g_int + 1;
+		//ind_b[3] = ind_b_int + 1;
+		ind_r[3] = ind_r[2] + 1;
+		
+	}
+
+	inline void sub2Idx(double *weight, double *ind_r, double *ind_g, double *ind_b, const double &height, const double &arraySize) const
+	{
+		double x_low = floor( _pt.at<double>(0));
+		//double x_heigh = ceil( _pt.at<double>(0));
+		double x_heigh = x_low + 1;
+		double y_low = floor( _pt.at<double>(1));
+		double y_heigh = y_low + 1;
+		//double y_heigh = ceil( _pt.at<double>(1));
+				
+		weight[0] = (x_heigh - _pt.at<double>(0)) * (y_heigh - _pt.at<double>(1));
+		weight[1] = (x_heigh - _pt.at<double>(0)) * ( _pt.at<double>(1) - y_low );
+		weight[2] = (_pt.at<double>(0) - x_low)    * (y_heigh - _pt.at<double>(1));		
+		weight[3] = (_pt.at<double>(0) - x_low)    * ( _pt.at<double>(1) - y_low );
+		//weight[3] = 1 - weight[0] - weight[1] - weight[2];
+				
 		double ind_r_int, ind_g_int, ind_b_int;
 		pixelPos pt(x_low, y_low);
-		pt._pt.at<double>(0) = x_low;	pt._pt.at<double>(1) = y_low;
+		//pt._pt.at<double>(0) = x_low;	pt._pt.at<double>(1) = y_low;
 		pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
 		ind_r[0] = ind_r_int;
 		ind_g[0] = ind_g_int;
 		ind_b[0] = ind_b_int;
 		
-		pt._pt.at<double>(0) = x_low;	pt._pt.at<double>(1) = y_heigh;
-		pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
-		ind_r[1] = ind_r_int;
-		ind_g[1] = ind_g_int;
-		ind_b[1] = ind_b_int;
+		//pt._pt.at<double>(0) = x_low;	pt._pt.at<double>(1) = y_heigh;
+		//pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
+		ind_r[1] = ind_r[0] + 1;
+		ind_g[1] = ind_g[0]  + 1;
+		ind_b[1] = ind_b[0] + 1;
 
-		pt._pt.at<double>(0) = x_heigh;	pt._pt.at<double>(1) = y_low;
-		pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
-		ind_r[2] = ind_r_int;
-		ind_g[2] = ind_g_int;
-		ind_b[2] = ind_b_int;
+		//pt._pt.at<double>(0) = x_heigh;	pt._pt.at<double>(1) = y_low;
+		//pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
+		//ind_r[2] = ind_r_int + height;
+		//ind_g[2] = ind_g_int + height;
+		//ind_b[2] = ind_b_int + height;
+		ind_r[2] = ind_r[0] + height;
+		ind_g[2] = ind_g[0] + height;
+		ind_b[2] = ind_b[0] + height;
 
-		pt._pt.at<double>(0) = x_heigh;	pt._pt.at<double>(1) = y_heigh;
-		pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
-		ind_r[3] = ind_r_int;
-		ind_g[3] = ind_g_int;
-		ind_b[3] = ind_b_int;
+		//pt._pt.at<double>(0) = x_heigh;	pt._pt.at<double>(1) = y_heigh;
+		//pt.sub2Idx(ind_r_int, ind_g_int, ind_b_int, height, arraySize);
+		//ind_r[3] = ind_r_int + 1;
+		//ind_g[3] = ind_g_int + 1;
+		//ind_b[3] = ind_b_int + 1;
+		ind_r[3] = ind_r[2] + 1;
+		ind_g[3] = ind_g[2] + 1;
+		ind_b[3] = ind_b[2] + 1;
 	}
+
 };
 
 
