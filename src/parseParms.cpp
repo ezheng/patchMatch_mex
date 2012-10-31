@@ -120,8 +120,11 @@ void patchMatch::findPixelColors(std::vector<pixelColor> &pColors, pixelPos *pPo
 		pColors[i]._color.at<double>(0) = img.imageData[static_cast<int>(ind_r)];
 		pColors[i]._color.at<double>(1) = img.imageData[static_cast<int>(ind_g)];
 		pColors[i]._color.at<double>(2) = img.imageData[static_cast<int>(ind_b)];
+		pColors[i]._color.at<double>(3) = 0.0;
 		//imageData[ind_r], imageData[ind_g], imageData[ind_b]
 	}
+
+	
 }
 
 void patchMatch::findPixelColorsInterpolation(std::vector<pixelColor> &pColors, const std::vector<pixelPos> &pPos, ImageStruct &img, const int& numOfPixels)
@@ -381,42 +384,38 @@ void patchMatch:: leftToRight()
 	double ref_w = (_imgStruct_1[0].w);
 	double ref_d = (_imgStruct_1[0].d);
 
-	size_t numOfImages = _imgStruct_2.size();
+	//size_t numOfImages = _imgStruct_2.size();
+	int maxNumOfPixels = static_cast<int>(pow(_halfWindowSize * 2 + 1, 2));
+	pixelPos *refPixelPos = new pixelPos[maxNumOfPixels];
+	std::vector<pixelColor> refPixelColor;
+	refPixelColor.resize(maxNumOfPixels);
+	pixelPos formerPixel;
+	pixelPos currentPixel;
+	int formerPixelIdx;
+	int currentPixelIdx;
+	double depth[3];	// three candidate depth			
+	std::vector<int> imageLayerId[2]; 			
+	std::vector<double> cost; 
+	cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
+	double colStart; double colEnd;
+	double rowStart; double rowEnd;	
+	int numOfPixels;
+	std::vector<double> costWithBestDepth; 
+	costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);
+	std::vector<bool> testedIdSet;
+	testedIdSet.resize(static_cast<int>( _distributionMap.d));
+	int bestDepthId;
+
+	std::vector<double> prob; 
+	prob.resize(static_cast<int>( _distributionMap.d));
+	std::vector<pixelPos> otherImagePixelPos;
+	otherImagePixelPos.resize(maxNumOfPixels);
+	std::vector<pixelColor> otherImagePixelColor;
+	otherImagePixelColor.resize(maxNumOfPixels);
 
 	//for(double row = 300; row < 301; row += 1.0)
 	for(double row = 1; row < ref_h; row += 1.0)
 	{	
-		
-		int maxNumOfPixels = static_cast<int>(pow(_halfWindowSize * 2 + 1, 2));
-		//std::vector<pixelPos> refPixelPos;
-		//refPixelPos.resize(maxNumOfPixels);
-		pixelPos *refPixelPos = new pixelPos[maxNumOfPixels];
-
-		std::vector<pixelColor> refPixelColor;
-		refPixelColor.resize(maxNumOfPixels);
-		pixelPos formerPixel;
-		pixelPos currentPixel;
-		int formerPixelIdx;
-		int currentPixelIdx;
-		double depth[3];	// three candidate depth			
-		std::vector<int> imageLayerId[2]; 			
-		std::vector<double> cost; 
-		cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
-		double colStart; double colEnd;
-		double rowStart; double rowEnd;	
-		int numOfPixels;
-		std::vector<double> costWithBestDepth; 
-		costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);
-		std::vector<bool> testedIdSet;
-		testedIdSet.resize(static_cast<int>( _distributionMap.d));
-		int bestDepthId;
-		std::vector<double> prob; 
-		prob.resize(static_cast<int>( _distributionMap.d));
-
-		std::vector<pixelPos> otherImagePixelPos;
-		otherImagePixelPos.resize(maxNumOfPixels);
-		std::vector<pixelColor> otherImagePixelColor;
-		otherImagePixelColor.resize(maxNumOfPixels);
 
 		//for(double col = 299; col <= 299; col+=1.0)
 		for(double col = 1; col < ref_w; col +=1.0)
@@ -489,9 +488,9 @@ void patchMatch:: leftToRight()
 
 			//9) update the distribution
 			UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap, prob);
-		}		
-		delete []refPixelPos;
+		}				
 	}
+	delete []refPixelPos;
 }
 
 void patchMatch:: UpdateDistributionMap(const std::vector<double> &cost, const pixelPos &currentPos, const dataMap & distributionMap, std::vector<double> &prob)
