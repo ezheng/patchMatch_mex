@@ -2,12 +2,23 @@ cmake_minimum_required(VERSION 2.7)
 project(patchMatch)
 
 #find_package(MATLAB REQUIRED)
+FIND_PACKAGE( OpenMP REQUIRED)
+
+
 set ( MATLAB_INCLUDE_DIR "C:/Program Files/MATLAB/R2011a/extern/include" )
 set ( MATLAB_LIB_PATH "C:/Program Files/MATLAB/R2011a/extern/lib/win64/microsoft")
 set ( OPENCV_LIB_PATH "C:/Enliang/library_64/opencv-2.4.2/build_64/install/lib")
 set ( OPENCV_INCLUDE_DIR "C:/Enliang/library_64/opencv-2.4.2/build_64/install/include")
 
 #--------------------------------------------------------------------------
+if(OPENMP_FOUND)
+message("OPENMP FOUND")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
+
+
 include_directories(${MATLAB_INCLUDE_DIR}
 					${OPENCV_INCLUDE_DIR})
 link_directories(${MATLAB_LIB_PATH}

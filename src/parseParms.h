@@ -7,6 +7,7 @@
 #include <vector>
 #include <opencv/cxcore.h>
 #include "utility.h"
+#include <omp.h>
 
 typedef struct 
 {
@@ -28,9 +29,11 @@ public:
 	std::vector<ImageStruct> _imgStruct_1;
 	std::vector<ImageStruct> _imgStruct_2;
 	double _halfWindowSize;
-	double _near;
-	double _far;
+	//double _near;
+	//double _far;
 	int _numOfSamples;
+	int _numOfThreadsUsed;
+
 	double _sigma;
 	timer _tt;
 
@@ -49,11 +52,12 @@ public:
 		parseDataMap(&_depthMaps, prhs[2]);		
 		parseDataMap(&_depthRandomMaps, prhs[3]);
 		parseDataMap(&_distributionMap, prhs[4]);
-		_halfWindowSize = 4;
-		_near = 3;
-		_far = 12;
-		_numOfSamples = 3;
+		_halfWindowSize = 3;
+		//_near = 3;
+		//_far = 15;
+		_numOfSamples = 5;
 		_sigma = 0.2;
+		_numOfThreadsUsed = omp_get_max_threads() - 1;
 
 		//_totalTime = 0;
 	}
@@ -63,6 +67,10 @@ public:
 	//pixelColor fetchColorOnePixel(const double *imageData, const int &ind_r, const int &ind_g, const int &ind_b );
 
 	void leftToRight();
+	void RightToLeft();
+	void TopToDown();
+	void DownToTop();
+
 	inline void findRange(const double &row, const double &col, double &rowStart, double &rowEnd, double &colStart, double &colEnd, const double &halfWindowSize, const double &w, const double &h)
 	{
 		rowStart = row - halfWindowSize >= 0 ? (row - halfWindowSize) : 0;
