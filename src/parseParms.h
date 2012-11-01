@@ -83,7 +83,7 @@ public:
 	void drawSamples(const dataMap &distributionMap, std::vector<int> &imageLayerId, int numOfSamples, const pixelPos &curPixel);
 	void normalizeDistribution(std::vector<double> &distribution);
 
-	void computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, const pixelPos* refPixelPos, const std::vector<pixelColor> &refNormColor,
+	void computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, const pixelPos* refPixelPos, const std::vector<pixelColor> &refNormColor,  const pixelColor &deviationColor,
 		int imageId, const double &depth,  const int& numOfPixels, std::vector<pixelPos> &otherImagePixelPos, std::vector<pixelColor> &otherImagePixelColor);
 
 	void getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos> &*/const pixelPos* refPixelPos , double depth, int imageId, const int& numOfPixels);
@@ -91,11 +91,12 @@ public:
 	double calculateNCC(std::vector<pixelColor> &otherImagePixelColor, const std::vector<pixelColor> &refPixelColor, const int &numOfPixels);
 	void UpdateDistributionMap(const std::vector<double> &cost, const pixelPos &currentPos, const dataMap & distributionMap, std::vector<double> &prob);
 	int findBestDepth_average(const std::vector<double> &cost, std::vector<bool> &testedIdSet);
-	void meanNormalize(const std::vector<pixelColor> &refPixelColor, std::vector<pixelColor> &refNormColor, const int &numOfPixels);
+	pixelColor meanNormalize(const std::vector<pixelColor> &refPixelColor, std::vector<pixelColor> &refNormColor, const int &numOfPixels);
 
 	bool determineFullPatch(const std::vector<pixelColor> &otherImagePixelColor, const int &numOfPixels);
 
-	double calculateNCC_withNormalized(const std::vector<pixelColor> &refNormColor, const std::vector<pixelColor> &otherNormColor, const int &numOfPixels);
+	double calculateNCC_withNormalized(const std::vector<pixelColor> &refNormColor, const pixelColor &refDeviationColor, 
+		const std::vector<pixelColor> &otherNormColor, const pixelColor &otherImageDeviationColor, const int &numOfPixels);
 
 };
 

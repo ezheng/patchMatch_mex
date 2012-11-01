@@ -1,7 +1,7 @@
 #include "parseParms.h"
 #include <assert.h>
 #include "utility.h"
-
+#include <omp.h>
 //#define _SECURE_SCL 0
 //#define _HAS_ITERATOR_DEBUGGING 0
 
@@ -177,9 +177,7 @@ void patchMatch::findPixelColorsInterpolation(std::vector<pixelColor> &pColors, 
 				pColors[i]._color.at<double>(2) += (img.imageData[static_cast<int>(ind_b[j])] * weight[j]);
 				//pColors[i]._color.at<double>(3) = 0.0f;		
 			}
-
-		}		
-		
+		}			
 	}
 }
 
@@ -281,8 +279,11 @@ bool patchMatch::determineFullPatch(const std::vector<pixelColor> &otherImagePix
 	return true;
 }
 
-double patchMatch :: calculateNCC_withNormalized(const std::vector<pixelColor> &refNormColor, const std::vector<pixelColor> &otherNormColor, const int &numOfPixels)
+double patchMatch :: calculateNCC_withNormalized(const std::vector<pixelColor> &refNormColor, const pixelColor &refDeviationColor, 
+	const std::vector<pixelColor> &otherNormColor, const pixelColor &otherImageDeviationColor, const int &numOfPixels)
 {
+//	refNormColor, refDeviationColor, otherImagePixelColor, otherImageDeviationColor
+
 	/*double a1 = 0,a2 = 0;
 	for(int i = 0; i<refNormColor.size(); i++)
 	{
@@ -298,34 +299,42 @@ double patchMatch :: calculateNCC_withNormalized(const std::vector<pixelColor> &
 		for( int j = 0; j<3; j++)
 			cost[j] += refNormColor[i]._color.at<double>(j) * otherNormColor[i]._color.at<double>(j);		
 	}
+	for(int i = 0; i< 3; i++)
+		cost[i] /= (refDeviationColor._color.at<double>(i) * otherImageDeviationColor._color.at<double>(i) + 0.000000000000001);	// devide by 0
+
+
 	return (cost[0] + cost[1] + cost[2])/3.0;
 }
 
 
-void patchMatch:: computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, const pixelPos* refPixelPos, const std::vector<pixelColor> &refNormColor,
+void patchMatch:: computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, const pixelPos* refPixelPos, const std::vector<pixelColor> &refNormColor, const pixelColor &refDeviationColor,
 	int imageId, const double &depth, const int& numOfPixels, std::vector<pixelPos> &otherImagePixelPos, std::vector<pixelColor> &otherImagePixelColor)
 {
 	
 	
 	getOtherImagePixelPos(otherImagePixelPos, refPixelPos, depth, imageId, numOfPixels);
 	
+	//_tt.startTimer();
 	findPixelColorsInterpolation(otherImagePixelColor, otherImagePixelPos, _imgStruct_2[imageId], numOfPixels);	// 	
+	//_tt.calculateTotalTime();
 
+	_tt.startTimer();
 	bool isFullPatch = determineFullPatch(otherImagePixelColor, numOfPixels);
 
 	if(isFullPatch)
 	{// use refNormColor
 		//std::vector<pixelColor> otherNormColor;
 		//otherNormColor.resize(numOfPixels);
-		meanNormalize(otherImagePixelColor, otherImagePixelColor, numOfPixels);
-		cost = calculateNCC_withNormalized(refNormColor, otherImagePixelColor, numOfPixels);		
+		pixelColor otherImageDeviationColor = meanNormalize(otherImagePixelColor, otherImagePixelColor, numOfPixels);
+		cost = calculateNCC_withNormalized(refNormColor, refDeviationColor, otherImagePixelColor, otherImageDeviationColor, numOfPixels);		
 	}
 	else
 	{
-		_tt.startTimer();
+		//_tt.startTimer();
 		cost = calculateNCC( otherImagePixelColor, refPixelColor, numOfPixels);
-		_tt.calculateTotalTime();
+		//_tt.calculateTotalTime();
 	}
+	_tt.calculateTotalTime();
 		
 	
 }	
@@ -341,8 +350,7 @@ void patchMatch::getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos
 	//cv::Mat HH = _imgStruct_2[imageId].H2/depth;
 
 	//int numOfPixels = static_cast<int>(refPixelPos.size());
-	//otherImagePixelPos.reserve(numOfPixels);
-
+	
 	//otherImagePixelPos.resize(numOfPixels);
 	for(int i = 0; i<numOfPixels; i++)
 	{
@@ -351,7 +359,7 @@ void patchMatch::getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos
 		otherImagePixelPos[i]._pt.at<double>(0) = refPixelPos[i]._pt.at<double>(0) + 0.5;
 		otherImagePixelPos[i]._pt.at<double>(1) = refPixelPos[i]._pt.at<double>(1) + 0.5;
 		otherImagePixelPos[i]._pt = H * otherImagePixelPos[i]._pt;
-		otherImagePixelPos[i]._pt /= otherImagePixelPos[i]._pt.at<double>(2);
+		otherImagePixelPos[i]._pt /= otherImagePixelPos[i]._pt.at<double>(2); // normalize
 		// normalize:
 		//newPixel = newPixel/newPixel.at<double>(2);
 		//otherImagePixelPos.push_back(pixelPos(newPixel)); 
@@ -371,19 +379,25 @@ double patchMatch::calculateNCC(std::vector<pixelColor> &otherImagePixelColor, c
 	pixelColor refImageMean(0.,0.,0.);	
 	int numOfValidPixels = 0;
 
+	for(int i = 0; i<numOfPixels; i++)
+	{
+		numOfValidPixels++;
+	}
+	if(numOfValidPixels == 0)
+	{
+		return -1;	
+	}
+
 	for(int i = 0; i < numOfPixels; i++)
 	{
 		if(otherImagePixelColor[i]._color.at<double>(3) != 1.0f)
 		{
 			otherImageMean._color += otherImagePixelColor[i]._color;
 			refImageMean._color += refPixelColor[i]._color;
-			numOfValidPixels += 1;			
+			//numOfValidPixels += 1;			
 		}		
 	}
-	if(numOfValidPixels == 0)
-	{
-		return -1;	
-	}
+	
 	//otherImageMean = otherImageMean * (1/ static_cast<double>(numOfValidPixels));
 	//refImageMean = refImageMean * (1/ static_cast<double>(numOfPixels));
 	double inverseNumOfValidPixels = 1.0/static_cast<double>(numOfValidPixels);
@@ -459,49 +473,52 @@ void patchMatch:: leftToRight()
 {
 	double ref_h = (_imgStruct_1[0].h);
 	double ref_w = (_imgStruct_1[0].w);
-	double ref_d = (_imgStruct_1[0].d);
+	//double ref_d = (_imgStruct_1[0].d);
 
 	//size_t numOfImages = _imgStruct_2.size();
-	int maxNumOfPixels = static_cast<int>(pow(_halfWindowSize * 2 + 1, 2));
-	pixelPos *refPixelPos = new pixelPos[maxNumOfPixels];
-	std::vector<pixelColor> refPixelColor;
-	refPixelColor.resize(maxNumOfPixels);
-	std::vector<pixelColor> refNormColor;
-	refNormColor.resize(maxNumOfPixels);
-
-	pixelPos formerPixel;
-	pixelPos currentPixel;
-	int formerPixelIdx;
-	int currentPixelIdx;
-	double depth[3];	// three candidate depth			
-	std::vector<int> imageLayerId[2]; 			
-	std::vector<double> cost; 
-	cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
-	double colStart; double colEnd;
-	double rowStart; double rowEnd;	
-	int numOfPixels;
-	std::vector<double> costWithBestDepth; 
-	costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);
-	std::vector<bool> testedIdSet;
-	testedIdSet.resize(static_cast<int>( _distributionMap.d));
-	int bestDepthId;
-
-	std::vector<double> prob; 
-	prob.resize(static_cast<int>( _distributionMap.d));
-	std::vector<pixelPos> otherImagePixelPos;
-	otherImagePixelPos.resize(maxNumOfPixels);
-	std::vector<pixelColor> otherImagePixelColor;
-	otherImagePixelColor.resize(maxNumOfPixels);
 
 	//for(double row = 300; row < 411; row += 1.0)
-	for(double row = 1; row < ref_h; row += 1.0)
+
+	//for(double row = 0; row < ref_h; row += 1.0)
+	#pragma  omp parallel for schedule(dynamic, 1) 	
+	for(int row = 0; row < static_cast<int>(ref_h); row += 1)
 	{	
+		int maxNumOfPixels = static_cast<int>(pow(_halfWindowSize * 2 + 1, 2));
+		pixelPos *refPixelPos = new pixelPos[maxNumOfPixels];
+		std::vector<pixelColor> refPixelColor;
+		refPixelColor.resize(maxNumOfPixels);
+		std::vector<pixelColor> refNormColor;
+		refNormColor.resize(maxNumOfPixels);
+
+		pixelPos formerPixel;
+		pixelPos currentPixel;
+		int formerPixelIdx;
+		int currentPixelIdx;
+		double depth[3];	// three candidate depth			
+		std::vector<int> imageLayerId[2]; 			
+		std::vector<double> cost; 
+		cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
+		double colStart; double colEnd;
+		double rowStart; double rowEnd;	
+		int numOfPixels;
+		std::vector<double> costWithBestDepth; 
+		costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);
+		std::vector<bool> testedIdSet;
+		testedIdSet.resize(static_cast<int>( _distributionMap.d));
+		int bestDepthId;
+
+		std::vector<double> prob; 
+		prob.resize(static_cast<int>( _distributionMap.d));
+		std::vector<pixelPos> otherImagePixelPos;
+		otherImagePixelPos.resize(maxNumOfPixels);
+		std::vector<pixelColor> otherImagePixelColor;
+		otherImagePixelColor.resize(maxNumOfPixels);
 
 		//for(double col = 299; col <= 399; col+=1.0)
 		for(double col = 1; col < ref_w; col +=1.0)
 		{			
 			//1) find the start and end of the row and col (start smaller than end)
-			findRange( row, col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
+			findRange( static_cast<double>(row), col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
 
 			//2)						
 			numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
@@ -515,8 +532,8 @@ void patchMatch:: leftToRight()
 			//4) draw random depth value, and image id
 			//pixelPos formerPixel(col-1, row);   // ***
 			//pixelPos currentPixel(col, row);
-			formerPixel._pt.at<double>(0) = col - 1;  formerPixel._pt.at<double>(1) = row; 
-			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = row; 
+			formerPixel._pt.at<double>(0) = col - 1;  formerPixel._pt.at<double>(1) = static_cast<double>(row); 
+			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = static_cast<double>(row); 
 			
 			formerPixelIdx = static_cast<int>(formerPixel.sub2Idx(_depthMaps.h));
 			currentPixelIdx = static_cast<int>(currentPixel.sub2Idx(_depthMaps.h));
@@ -537,7 +554,7 @@ void patchMatch:: leftToRight()
 			std::fill(cost.begin(), cost.end(), UNSET);
 
 			// calculate
-			meanNormalize(refPixelColor, refNormColor, numOfPixels);
+			pixelColor deviationColor = meanNormalize(refPixelColor, refNormColor, numOfPixels);
 
 			for(int j = 0; j < 2; j++ )			
 			{
@@ -548,7 +565,9 @@ void patchMatch:: leftToRight()
 						// I can calculate all the cost at the same time, in order to save time.
 						for(int i = 0; i<3; i++)
 						{
-							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
+							//_tt.startTimer();
+							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
+							//_tt.calculateTotalTime();
 						}
 					}
 					//for(int i = 0; i< 3; i++)
@@ -571,7 +590,7 @@ void patchMatch:: leftToRight()
 			{
 				if(testedIdSet[j] == false)	// not tested before
 				{					
-					computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, refNormColor, j, depth[bestDepthId], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
+					computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, refNormColor, deviationColor, j, depth[bestDepthId], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
 				}
 				else
 					costWithBestDepth[j] = cost[j*3 + bestDepthId] ;
@@ -579,12 +598,13 @@ void patchMatch:: leftToRight()
 
 			//9) update the distribution
 			UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap, prob);
-		}				
+		}			
+		delete []refPixelPos;
 	}
-	delete []refPixelPos;
+	
 }
 
-void patchMatch::meanNormalize(const std::vector<pixelColor> &refPixelColor, std::vector<pixelColor> &refNormColor, const int &numOfPixels)
+pixelColor patchMatch::meanNormalize(const std::vector<pixelColor> &refPixelColor, std::vector<pixelColor> &refNormColor, const int &numOfPixels)
 {	
 
 	pixelColor meanColor(0.0,0.0,0.0);
@@ -594,20 +614,21 @@ void patchMatch::meanNormalize(const std::vector<pixelColor> &refPixelColor, std
 	}
 	meanColor._color /= numOfPixels;
 
-	pixelColor varColor(0.0, 0.0, 0.0);
+	pixelColor deviationColor(0.0, 0.0, 0.0);
 	for(int i = 0; i<numOfPixels; i++)
 	{
 		refNormColor[i]._color = refPixelColor[i]._color - meanColor._color;
-		varColor._color += (refNormColor[i]._color.mul(refNormColor[i]._color));		
+		deviationColor._color += (refNormColor[i]._color.mul(refNormColor[i]._color));		
 	}	
-	varColor.sqrtRoot();
+	deviationColor.sqrtRoot();
 
-	for(int i = 0; i<numOfPixels; i++)
+	/*for(int i = 0; i<numOfPixels; i++)
 		for(int j = 0; j<3; j++)
 		{
-			if(varColor._color.at<double>(j) != 0)
-				refNormColor[i]._color.at<double>(j) /= varColor._color.at<double>(j);
-		}
+			if(deviationColor._color.at<double>(j) != 0)
+				refNormColor[i]._color.at<double>(j) /= deviationColor._color.at<double>(j);
+		}*/
+	return deviationColor;
 	
 }
 
@@ -650,10 +671,11 @@ int patchMatch::findBestDepth_average(const std::vector<double> &cost, std::vect
 			testedIdSet[i] = false;	// not tested
 		}
 	}
-	for(int i = 0; i<3; i++)
+	/*for(int i = 0; i<3; i++)	// calculate the average cost. This step is not necessary.
 	{
 		averageCost[i] /= numOfImagesTested;
-	}
+	}*/
+
 	double maxCost = averageCost[0];
 	int bestDepthId = 0;
 	for(int i = 1; i<3; i++)
