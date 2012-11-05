@@ -6,10 +6,10 @@
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-	if( nrhs != 6)
+	if( nrhs < 7)
 		mexErrMsgTxt("the number of input is not correct. \nThe input: ref_img_struct, otherImage_struct, depthMap, randMap, mapDistribution, \
-			choice (0 -- leftToRight, 1-- topToDown, 2 -- rightToLeft, 3 -- downToTop )\n");
-	if( nlhs != 2)
+			choice (0 -- leftToRight, 1-- topToDown, 2 -- rightToLeft, 3 -- downToTop ), orientationMap\n");
+	if( nlhs < 3)
 		mexErrMsgTxt("the number of output is not correct. \nThe output: depthMap, mapDistributio\n ");
 
 
@@ -34,15 +34,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	default:
 		mexErrMsgTxt("Error: the choice is not correctly found. Choice (0 -- leftToRight, 1-- topToDown, 2 -- rightToLeft, 3 -- downToTop");
 	}
-	
-	
-
-
 	//pm._tt.printTime();	
 	//printf("Total time is: %f", pm._totalTime);
 	// copy the output:
 
 	plhs[0] = pm._depthMaps.p;
 	plhs[1] = pm._distributionMap.p;
+	plhs[2] = pm._orientationMap.p;
 
 }

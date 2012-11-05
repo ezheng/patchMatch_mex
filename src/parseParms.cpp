@@ -2,8 +2,7 @@
 #include <assert.h>
 #include "utility.h"
 #include <omp.h>
-//#define _SECURE_SCL 0
-//#define _HAS_ITERATOR_DEBUGGING 0
+
 #define USE_OPENMP
 
 #define UNSET -2.0
@@ -66,8 +65,8 @@ void patchMatch:: parseImageStructure(std::vector<ImageStruct> *allImgStruct, co
 
 void patchMatch::parseDataMap(dataMap *dataMaps, const mxArray *p)
 {
-	dataMaps->p = mxDuplicateArray(p);
-	dataMaps->data = mxGetPr(dataMaps->p);
+	dataMaps->p = mxDuplicateArray(p);		// deep copy of the array
+	dataMaps->data = mxGetPr(dataMaps->p);	// this pointer points to copied array
 	mwSize numOfDimensions = mxGetNumberOfDimensions(p);
 
 	const mwSize *sz = mxGetDimensions(dataMaps->p);
@@ -308,11 +307,10 @@ double patchMatch :: calculateNCC_withNormalized(const std::vector<pixelColor> &
 
 
 void patchMatch:: computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, const pixelPos* refPixelPos, const std::vector<pixelColor> &refNormColor, const pixelColor &refDeviationColor,
-	int imageId, const double &depth, const int& numOfPixels, std::vector<pixelPos> &otherImagePixelPos, std::vector<pixelColor> &otherImagePixelColor)
-{
+	int imageId, const double &depth, const int& numOfPixels, std::vector<pixelPos> &otherImagePixelPos, std::vector<pixelColor> &otherImagePixelColor, const cv::Mat &orientation)
+{	
 	
-	
-	getOtherImagePixelPos(otherImagePixelPos, refPixelPos, depth, imageId, numOfPixels);
+	getOtherImagePixelPos(otherImagePixelPos, refPixelPos, depth, imageId, numOfPixels, orientation);
 	
 	//_tt.startTimer();
 	findPixelColorsInterpolation(otherImagePixelColor, otherImagePixelPos, _imgStruct_2[imageId], numOfPixels);	// 	
@@ -339,15 +337,21 @@ void patchMatch:: computeCost(double &cost, const std::vector<pixelColor> &refPi
 	
 }	
 
-void patchMatch::getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos>*/ const pixelPos* refPixelPos, double depth, int imageId, const int& numOfPixels)
+void patchMatch::getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos>*/ const pixelPos* refPixelPos, double depth, int imageId, const int& numOfPixels, const cv::Mat &orientation)
 {
 	//cv::Mat normalVector = (cv::Mat_<double>(1,3) << 0, 0, 1);
 	//cv::Mat opencv_R = _imgStruct_2[imageId].opencv_R *_imgStruct_1[0].opencv_inverseR ;
 	//cv::Mat opencv_T = _imgStruct_2[imageId].opencv_R * (_imgStruct_2[imageId].opencv_C - _imgStruct_1[0].opencv_C);	
 	//cv::Mat H = _imgStruct_2[imageId].opencv_K * (opencv_R - opencv_T * normalVector / depth) * _imgStruct_1[0].opencv_inverseK;
 	//cv::Mat H = _imgStruct_2[imageId].opencv_K * (_imgStruct_2[imageId].opencv_relative_R - _imgStruct_2[imageId].opencv_relative_T * normalVector / depth) * _imgStruct_1[0].opencv_inverseK;
-	cv::Mat H = _imgStruct_2[imageId].H1 - (_imgStruct_2[imageId].H2/depth);
-	//cv::Mat HH = _imgStruct_2[imageId].H2/depth;
+	
+	cv::Mat H2 = _imgStruct_2[imageId].opencv_K * _imgStruct_2[imageId].opencv_relative_T * orientation * _imgStruct_1[0].opencv_inverseK;
+	
+	cv::Mat H = _imgStruct_2[imageId].H1 - (H2/depth);
+	
+
+//		H2 = opencv_K * opencv_relative_T * normalVector * refImg.opencv_inverseK;
+
 
 	//int numOfPixels = static_cast<int>(refPixelPos.size());
 	
@@ -469,6 +473,119 @@ double patchMatch::calculateNCC(std::vector<pixelColor> &otherImagePixelColor, c
 	return (cost_rgb[0] + cost_rgb[1] + cost_rgb[2])/3.0 * inverseNumOfValidPixels;
 }
 
+void patchMatch::getOrientation(const dataMap &orientationMap, int pixelIdx, cv::Mat &orientation)
+{
+	orientation.at<double>(0) = orientationMap.data[pixelIdx];
+	orientation.at<double>(1) = orientationMap.data[pixelIdx + static_cast<int>(orientationMap.arraySize)];
+	orientation.at<double>(2) = orientationMap.data[pixelIdx + static_cast<int>(orientationMap.arraySize) * 2];
+	if(orientation.at<double>(2) < 0)
+	{
+		orientation *= -1;
+	}
+}
+
+void patchMatch::getRandomOrientation(cv::Mat &orientation)
+{
+	for(int i = 0; i<3; i++)
+		orientation.at<double>(i) = rand()/static_cast<double>(RAND_MAX) * 2.0 - 1.0;
+	//orientation = cv::normalize(orientation);
+	cv::normalize(orientation, orientation);
+	if(orientation.at<double>(2) < 0)
+	{
+		orientation *= -1;
+	}
+
+	orientation.at<double>(0) = 0.0;
+	orientation.at<double>(1) = 0.0;
+	orientation.at<double>(2) = 1.0;
+
+
+}
+
+void patchMatch::wrap1(const double &row, const double &col, double &colStart, double &colEnd,
+		double &rowStart, double &rowEnd, int &numOfPixels, pixelPos *refPixelPos, std::vector<pixelColor> &refPixelColor, 
+		const double &ref_w, const double &ref_h)
+{
+	//1) find the start and end of the row and col (start smaller than end)
+	findRange( row, col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
+
+	//2)						
+	numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
+	findPixelPos(refPixelPos, numOfPixels ,rowStart, rowEnd, colStart, colEnd);	// 
+			
+	//3) find the color in reference image given pixels			
+	//std::vector<pixelColor> refPixelColor;
+	//refPixelColor.reserve(numOfPixels);
+	findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0], numOfPixels);	// within this function, it should allow non-integer pixel positions
+}
+
+void patchMatch::wrap2(int &formerPixelIdx, int &currentPixelIdx, double *depth, 
+	cv::Mat *orientation, std::vector<int> *imageLayerId, const int &numOfPixels,
+	pixelPos &formerPixel, pixelPos &currentPixel, 
+	std::vector<pixelColor> &refPixelColor, std::vector<pixelColor> &refNormColor, pixelPos *refPixelPos,
+	std::vector<double> &cost,  std::vector<bool> &testedIdSet, int &bestDepthId, 
+	std::vector<double> &costWithBestDepth, std::vector<pixelPos> &otherImagePixelPos, std::vector<pixelColor> &otherImagePixelColor, 
+	std::vector<double> &prob
+	)
+{
+		formerPixelIdx = static_cast<int>(formerPixel.sub2Idx(_depthMaps.h));
+		currentPixelIdx = static_cast<int>(currentPixel.sub2Idx(_depthMaps.h));
+						
+		depth[0] = _depthMaps.data[formerPixelIdx]; 
+		getOrientation(_orientationMap, formerPixelIdx, orientation[0]);
+		depth[1] = _depthRandomMaps.data[currentPixelIdx]; /* randomly initialize a orientation*/ 
+		getRandomOrientation(orientation[1]);
+		depth[2] = _depthMaps.data[currentPixelIdx]; 
+		getOrientation(_orientationMap, currentPixelIdx, orientation[2]);
+
+		//5) draw samples and update the image ID distribution
+		// draw samples:
+		drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
+		drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
+		
+		//6) transforming the pixels to the other image (depth given, image id is given) and find the color for given pixels. calculate costs	
+		std::fill(cost.begin(), cost.end(), UNSET);
+
+		// calculate
+		pixelColor deviationColor = meanNormalize(refPixelColor, refNormColor, numOfPixels);
+		for(int j = 0; j < 2; j++ )	
+		{
+			for(int k = 0; k < imageLayerId[j].size(); k++ )				
+			{
+				if(cost[3 * imageLayerId[j][k]] == UNSET)
+				{
+					// I can calculate all the cost at the same time, in order to save time.
+					for(int i = 0; i<3; i++)
+					{							
+						computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[i]); // cost is the output							
+					}
+				}				
+			}
+		}
+		//7) based on the cost, VOTE which depth to use. and then save the depth			
+		bestDepthId = findBestDepth_average(cost, testedIdSet);
+		_depthMaps.data[currentPixelIdx] = depth[bestDepthId];
+		assignOrientationMap(_orientationMap, currentPixelIdx, orientation[bestDepthId]);
+
+		//8) test the untested sample
+		/*std::vector<double> costWithBestDepth; 
+		costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);*/
+		for(int j = 0; j<testedIdSet.size(); j++)
+		{
+			if(testedIdSet[j] == false)	// not tested before
+			{					
+				computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, refNormColor, deviationColor, j, depth[bestDepthId], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[bestDepthId]); // cost is the output
+			}
+			else
+				costWithBestDepth[j] = cost[j*3 + bestDepthId] ;
+		}		
+
+		//9) update the distribution
+		UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap, prob);
+
+}
+
+
 void patchMatch:: leftToRight()
 {
 	double ref_h = (_imgStruct_1[0].h);
@@ -476,14 +593,11 @@ void patchMatch:: leftToRight()
 	//double ref_d = (_imgStruct_1[0].d);
 
 	//size_t numOfImages = _imgStruct_2.size();
-
 	//for(double row = 300; row < 411; row += 1.0)
-
 	//for(double row = 0; row < ref_h; row += 1.0)
 #ifdef USE_OPENMP
 	#pragma  omp parallel for schedule(dynamic) 	num_threads(_numOfThreadsUsed)
 #endif
-
 	for(int row = 0; row < static_cast<int>(ref_h); row += 1)
 	{	
 		int maxNumOfPixels = static_cast<int>(pow(_halfWindowSize * 2 + 1, 2));
@@ -517,93 +631,33 @@ void patchMatch:: leftToRight()
 		std::vector<pixelColor> otherImagePixelColor;
 		otherImagePixelColor.resize(maxNumOfPixels);
 
+		cv::Mat orientation[3];
+		for(int i=0; i<3; i++)
+			orientation[i].create(1,3,CV_64F);
 		//for(double col = 299; col <= 399; col+=1.0)
 		for(double col = 1; col < ref_w; col +=1.0)
 		{			
-			//1) find the start and end of the row and col (start smaller than end)
-			findRange( static_cast<double>(row), col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
-
-			//2)						
-			numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
-			findPixelPos(refPixelPos, numOfPixels ,rowStart, rowEnd, colStart, colEnd);	// 
-			
-			//3) find the color in reference image given pixels			
-			//std::vector<pixelColor> refPixelColor;
-			//refPixelColor.reserve(numOfPixels);
-			findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0], numOfPixels);	// within this function, it should allow non-integer pixel positions
-
-			//4) draw random depth value, and image id
-			//pixelPos formerPixel(col-1, row);   // ***
-			//pixelPos currentPixel(col, row);
+			wrap1(static_cast<double>(row), col, colStart, colEnd, rowStart, rowEnd, numOfPixels, refPixelPos, refPixelColor, 
+				ref_w, ref_h);
+			//4) draw random depth value, and image id			
 			formerPixel._pt.at<double>(0) = col - 1;  formerPixel._pt.at<double>(1) = static_cast<double>(row); 
 			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = static_cast<double>(row); 
 			
-			formerPixelIdx = static_cast<int>(formerPixel.sub2Idx(_depthMaps.h));
-			currentPixelIdx = static_cast<int>(currentPixel.sub2Idx(_depthMaps.h));
-						
-			depth[0] = _depthMaps.data[formerPixelIdx];
-			depth[1] = _depthRandomMaps.data[currentPixelIdx];
-			depth[2] = _depthMaps.data[currentPixelIdx];		
-
-			//5) draw samples and update the image ID distribution
-			// draw samples:
-			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
-			drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
-			//imageLayerId[0][0] = 3;
-
-			//6) transforming the pixels to the other image (depth given, image id is given) and find the color for given pixels. calculate costs
-			//std::vector<double> cost; 
-			//cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
-			std::fill(cost.begin(), cost.end(), UNSET);
-
-			// calculate
-			pixelColor deviationColor = meanNormalize(refPixelColor, refNormColor, numOfPixels);
-
-			for(int j = 0; j < 2; j++ )			
-			{
-				for(int k = 0; k < imageLayerId[j].size(); k++ )				
-				{
-					if(cost[3 * imageLayerId[j][k]] == UNSET)
-					{
-						// I can calculate all the cost at the same time, in order to save time.
-						for(int i = 0; i<3; i++)
-						{
-							//_tt.startTimer();
-							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-							//_tt.calculateTotalTime();
-						}
-					}
-					//for(int i = 0; i< 3; i++)
-					//{						
-						//if(cost[i + 3 * imageLayerId[j][k]] == UNSET)
-						//{
-						//	computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-						//}
-					//}
-				}
-			}
-			//7) based on the cost, VOTE which depth to use. and then save the depth			
-			bestDepthId = findBestDepth_average(cost, testedIdSet);
-			_depthMaps.data[currentPixelIdx] = depth[bestDepthId];
-
-			//8) test the untested sample
-			/*std::vector<double> costWithBestDepth; 
-			costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);*/
-			for(int j = 0; j<testedIdSet.size(); j++)
-			{
-				if(testedIdSet[j] == false)	// not tested before
-				{					
-					computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, refNormColor, deviationColor, j, depth[bestDepthId], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-				}
-				else
-					costWithBestDepth[j] = cost[j*3 + bestDepthId] ;
-			}		
-
-			//9) update the distribution
-			UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap, prob);
+			wrap2(formerPixelIdx, currentPixelIdx, depth,
+				orientation, imageLayerId, numOfPixels,
+				formerPixel, currentPixel, refPixelColor, refNormColor, refPixelPos,
+				cost, testedIdSet, bestDepthId, 
+				costWithBestDepth, otherImagePixelPos, otherImagePixelColor, prob);						
 		}			
 		delete []refPixelPos;
 	}	
+}
+
+void patchMatch::assignOrientationMap(dataMap &orientationMap, const int &currentPixelIdx, const cv::Mat &orientation)
+{
+	orientationMap.data[currentPixelIdx] = 	orientation.at<double>(0);
+	orientationMap.data[currentPixelIdx + static_cast<int>(orientationMap.arraySize)] = orientation.at<double>(1);
+	orientationMap.data[currentPixelIdx + static_cast<int>(orientationMap.arraySize) * 2] = orientation.at<double>(2);
 }
 
 void patchMatch:: TopToDown()
@@ -613,9 +667,7 @@ void patchMatch:: TopToDown()
 	//double ref_d = (_imgStruct_1[0].d);
 
 	//size_t numOfImages = _imgStruct_2.size();
-
 	//for(double row = 300; row < 411; row += 1.0)
-
 	//for(double row = 0; row < ref_h; row += 1.0)
 #ifdef USE_OPENMP
 	#pragma  omp parallel for schedule(dynamic, 1)  num_threads(_numOfThreadsUsed)	
@@ -653,90 +705,27 @@ void patchMatch:: TopToDown()
 		std::vector<pixelColor> otherImagePixelColor;
 		otherImagePixelColor.resize(maxNumOfPixels);
 
+		cv::Mat orientation[3];
+		for(int i=0; i<3; i++)
+			orientation[i].create(1,3,CV_64F);
+
 		//for(double col = 299; col <= 399; col+=1.0)
 		for(double row = 1.0; row < ref_h; row += 1.0)
-		{			
-			//1) find the start and end of the row and col (start smaller than end)
-			findRange( static_cast<double>(row), col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
-
-			//2)						
-			numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
-			findPixelPos(refPixelPos, numOfPixels ,rowStart, rowEnd, colStart, colEnd);	// 
-			
-			//3) find the color in reference image given pixels			
-			//std::vector<pixelColor> refPixelColor;
-			//refPixelColor.reserve(numOfPixels);
-			findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0], numOfPixels);	// within this function, it should allow non-integer pixel positions
-
+		{	
+			wrap1(row,static_cast<double>(col), colStart, colEnd, rowStart, rowEnd, numOfPixels, refPixelPos, refPixelColor, 
+				ref_w, ref_h);
 			//4) draw random depth value, and image id
 			//pixelPos formerPixel(col-1, row);   // ***
 			//pixelPos currentPixel(col, row);
 			formerPixel._pt.at<double>(0) = col;  formerPixel._pt.at<double>(1) = static_cast<double>(row - 1); 
 			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = static_cast<double>(row); 
 			
-			formerPixelIdx = static_cast<int>(formerPixel.sub2Idx(_depthMaps.h));
-			currentPixelIdx = static_cast<int>(currentPixel.sub2Idx(_depthMaps.h));
-						
-			depth[0] = _depthMaps.data[formerPixelIdx];
-			depth[1] = _depthRandomMaps.data[currentPixelIdx];
-			depth[2] = _depthMaps.data[currentPixelIdx];		
-
-			//5) draw samples and update the image ID distribution
-			// draw samples:
-			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
-			drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
-			//imageLayerId[0][0] = 3;
-
-			//6) transforming the pixels to the other image (depth given, image id is given) and find the color for given pixels. calculate costs
-			//std::vector<double> cost; 
-			//cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
-			std::fill(cost.begin(), cost.end(), UNSET);
-
-			// calculate
-			pixelColor deviationColor = meanNormalize(refPixelColor, refNormColor, numOfPixels);
-
-			for(int j = 0; j < 2; j++ )			
-			{
-				for(int k = 0; k < imageLayerId[j].size(); k++ )				
-				{
-					if(cost[3 * imageLayerId[j][k]] == UNSET)
-					{
-						// I can calculate all the cost at the same time, in order to save time.
-						for(int i = 0; i<3; i++)
-						{
-							//_tt.startTimer();
-							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-							//_tt.calculateTotalTime();
-						}
-					}
-					//for(int i = 0; i< 3; i++)
-					//{						
-						//if(cost[i + 3 * imageLayerId[j][k]] == UNSET)
-						//{
-						//	computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-						//}
-					//}
-				}
-			}
-			//7) based on the cost, VOTE which depth to use. and then save the depth			
-			bestDepthId = findBestDepth_average(cost, testedIdSet);
-			_depthMaps.data[currentPixelIdx] = depth[bestDepthId];
-
-			//8) test the untested sample
-			/*std::vector<double> costWithBestDepth; 
-			costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);*/
-			for(int j = 0; j<testedIdSet.size(); j++)
-			{
-				if(testedIdSet[j] == false)	// not tested before
-				{					
-					computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, refNormColor, deviationColor, j, depth[bestDepthId], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-				}
-				else
-					costWithBestDepth[j] = cost[j*3 + bestDepthId] ;
-			}		
-
-			//9) update the distribution
-			UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap, prob);
+			wrap2(formerPixelIdx, currentPixelIdx, depth,
+				orientation, imageLayerId, numOfPixels,
+				formerPixel, currentPixel, refPixelColor, refNormColor, refPixelPos,
+				cost, testedIdSet, bestDepthId, 
+				costWithBestDepth, otherImagePixelPos, otherImagePixelColor, prob);			
+			
 		}			
 		delete []refPixelPos;
 	}	
@@ -787,20 +776,27 @@ void patchMatch:: DownToTop()
 		std::vector<pixelColor> otherImagePixelColor;
 		otherImagePixelColor.resize(maxNumOfPixels);
 
+		cv::Mat orientation[3];
+		for(int i=0; i<3; i++)
+			orientation[i].create(1,3,CV_64F);
+
 		//for(double col = 299; col <= 399; col+=1.0)
 		for(double row = ref_h - 2; row >= 0; row -= 1.0)
 		{			
-			//1) find the start and end of the row and col (start smaller than end)
-			findRange( static_cast<double>(row), col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
+			////1) find the start and end of the row and col (start smaller than end)
+			//findRange( static_cast<double>(row), col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
 
-			//2)						
-			numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
-			findPixelPos(refPixelPos, numOfPixels ,rowStart, rowEnd, colStart, colEnd);	// 
-			
-			//3) find the color in reference image given pixels			
-			//std::vector<pixelColor> refPixelColor;
-			//refPixelColor.reserve(numOfPixels);
-			findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0], numOfPixels);	// within this function, it should allow non-integer pixel positions
+			////2)						
+			//numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
+			//findPixelPos(refPixelPos, numOfPixels ,rowStart, rowEnd, colStart, colEnd);	// 
+			//
+			////3) find the color in reference image given pixels			
+			////std::vector<pixelColor> refPixelColor;
+			////refPixelColor.reserve(numOfPixels);
+			//findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0], numOfPixels);	// within this function, it should allow non-integer pixel positions
+
+			wrap1(row,static_cast<double>(col), colStart, colEnd, rowStart, rowEnd, numOfPixels, refPixelPos, refPixelColor, 
+				ref_w, ref_h);
 
 			//4) draw random depth value, and image id
 			//pixelPos formerPixel(col-1, row);   // ***
@@ -808,69 +804,11 @@ void patchMatch:: DownToTop()
 			formerPixel._pt.at<double>(0) = col;  formerPixel._pt.at<double>(1) = static_cast<double>(row + 1); 
 			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = static_cast<double>(row); 
 			
-			formerPixelIdx = static_cast<int>(formerPixel.sub2Idx(_depthMaps.h));
-			currentPixelIdx = static_cast<int>(currentPixel.sub2Idx(_depthMaps.h));
-						
-			depth[0] = _depthMaps.data[formerPixelIdx];
-			depth[1] = _depthRandomMaps.data[currentPixelIdx];
-			depth[2] = _depthMaps.data[currentPixelIdx];		
-
-			//5) draw samples and update the image ID distribution
-			// draw samples:
-			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
-			drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
-			//imageLayerId[0][0] = 3;
-
-			//6) transforming the pixels to the other image (depth given, image id is given) and find the color for given pixels. calculate costs
-			//std::vector<double> cost; 
-			//cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
-			std::fill(cost.begin(), cost.end(), UNSET);
-
-			// calculate
-			pixelColor deviationColor = meanNormalize(refPixelColor, refNormColor, numOfPixels);
-
-			for(int j = 0; j < 2; j++ )			
-			{
-				for(int k = 0; k < imageLayerId[j].size(); k++ )				
-				{
-					if(cost[3 * imageLayerId[j][k]] == UNSET)
-					{
-						// I can calculate all the cost at the same time, in order to save time.
-						for(int i = 0; i<3; i++)
-						{
-							//_tt.startTimer();
-							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-							//_tt.calculateTotalTime();
-						}
-					}
-					//for(int i = 0; i< 3; i++)
-					//{						
-						//if(cost[i + 3 * imageLayerId[j][k]] == UNSET)
-						//{
-						//	computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-						//}
-					//}
-				}
-			}
-			//7) based on the cost, VOTE which depth to use. and then save the depth			
-			bestDepthId = findBestDepth_average(cost, testedIdSet);
-			_depthMaps.data[currentPixelIdx] = depth[bestDepthId];
-
-			//8) test the untested sample
-			/*std::vector<double> costWithBestDepth; 
-			costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);*/
-			for(int j = 0; j<testedIdSet.size(); j++)
-			{
-				if(testedIdSet[j] == false)	// not tested before
-				{					
-					computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, refNormColor, deviationColor, j, depth[bestDepthId], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-				}
-				else
-					costWithBestDepth[j] = cost[j*3 + bestDepthId] ;
-			}		
-
-			//9) update the distribution
-			UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap, prob);
+			wrap2(formerPixelIdx, currentPixelIdx, depth,
+				orientation, imageLayerId, numOfPixels,
+				formerPixel, currentPixel, refPixelColor, refNormColor, refPixelPos,
+				cost, testedIdSet, bestDepthId, 
+				costWithBestDepth, otherImagePixelPos, otherImagePixelColor, prob);			
 		}			
 		delete []refPixelPos;
 	}	
@@ -924,20 +862,16 @@ void patchMatch:: RightToLeft()
 		std::vector<pixelColor> otherImagePixelColor;
 		otherImagePixelColor.resize(maxNumOfPixels);
 
+		cv::Mat orientation[3];
+		for(int i=0; i<3; i++)
+			orientation[i].create(1,3,CV_64F);
+
 		//for(double col = 299; col <= 399; col+=1.0)
 		for(double col = ref_w - 2; col >= 0; col -=1.0)
 		{			
-			//1) find the start and end of the row and col (start smaller than end)
-			findRange( static_cast<double>(row), col, rowStart, rowEnd, colStart, colEnd, _halfWindowSize, ref_w, ref_h);	
-
-			//2)						
-			numOfPixels = static_cast<int>(((colEnd - colStart + 1) * (rowEnd - rowStart + 1))); 
-			findPixelPos(refPixelPos, numOfPixels ,rowStart, rowEnd, colStart, colEnd);	// 
 			
-			//3) find the color in reference image given pixels			
-			//std::vector<pixelColor> refPixelColor;
-			//refPixelColor.reserve(numOfPixels);
-			findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0], numOfPixels);	// within this function, it should allow non-integer pixel positions
+			wrap1(static_cast<double>(row) ,col, colStart, colEnd, rowStart, rowEnd, numOfPixels, refPixelPos, refPixelColor, 
+				ref_w, ref_h);
 
 			//4) draw random depth value, and image id
 			//pixelPos formerPixel(col-1, row);   // ***
@@ -945,69 +879,11 @@ void patchMatch:: RightToLeft()
 			formerPixel._pt.at<double>(0) = col + 1;  formerPixel._pt.at<double>(1) = static_cast<double>(row); 
 			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = static_cast<double>(row); 
 			
-			formerPixelIdx = static_cast<int>(formerPixel.sub2Idx(_depthMaps.h));
-			currentPixelIdx = static_cast<int>(currentPixel.sub2Idx(_depthMaps.h));
-						
-			depth[0] = _depthMaps.data[formerPixelIdx];
-			depth[1] = _depthRandomMaps.data[currentPixelIdx];
-			depth[2] = _depthMaps.data[currentPixelIdx];		
-
-			//5) draw samples and update the image ID distribution
-			// draw samples:
-			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
-			drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
-			//imageLayerId[0][0] = 3;
-
-			//6) transforming the pixels to the other image (depth given, image id is given) and find the color for given pixels. calculate costs
-			//std::vector<double> cost; 
-			//cost.resize(3 * static_cast<int>(_distributionMap.d), UNSET);	
-			std::fill(cost.begin(), cost.end(), UNSET);
-
-			// calculate
-			pixelColor deviationColor = meanNormalize(refPixelColor, refNormColor, numOfPixels);
-
-			for(int j = 0; j < 2; j++ )			
-			{
-				for(int k = 0; k < imageLayerId[j].size(); k++ )				
-				{
-					if(cost[3 * imageLayerId[j][k]] == UNSET)
-					{
-						// I can calculate all the cost at the same time, in order to save time.
-						for(int i = 0; i<3; i++)
-						{
-							//_tt.startTimer();
-							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-							//_tt.calculateTotalTime();
-						}
-					}
-					//for(int i = 0; i< 3; i++)
-					//{						
-						//if(cost[i + 3 * imageLayerId[j][k]] == UNSET)
-						//{
-						//	computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-						//}
-					//}
-				}
-			}
-			//7) based on the cost, VOTE which depth to use. and then save the depth			
-			bestDepthId = findBestDepth_average(cost, testedIdSet);
-			_depthMaps.data[currentPixelIdx] = depth[bestDepthId];
-
-			//8) test the untested sample
-			/*std::vector<double> costWithBestDepth; 
-			costWithBestDepth.resize( static_cast<int>( _distributionMap.d), UNSET);*/
-			for(int j = 0; j<testedIdSet.size(); j++)
-			{
-				if(testedIdSet[j] == false)	// not tested before
-				{					
-					computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, refNormColor, deviationColor, j, depth[bestDepthId], numOfPixels, otherImagePixelPos, otherImagePixelColor); // cost is the output
-				}
-				else
-					costWithBestDepth[j] = cost[j*3 + bestDepthId] ;
-			}		
-
-			//9) update the distribution
-			UpdateDistributionMap(costWithBestDepth, currentPixel, _distributionMap, prob);
+			wrap2(formerPixelIdx, currentPixelIdx, depth,
+				orientation, imageLayerId, numOfPixels,
+				formerPixel, currentPixel, refPixelColor, refNormColor, refPixelPos,
+				cost, testedIdSet, bestDepthId, 
+				costWithBestDepth, otherImagePixelPos, otherImagePixelColor, prob);			
 		}			
 		delete []refPixelPos;
 	}	
