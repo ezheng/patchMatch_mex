@@ -55,12 +55,13 @@ public:
 		parseDataMap(&_depthRandomMaps, prhs[3]);
 		parseDataMap(&_distributionMap, prhs[4]);
 		parseDataMap(&_orientationMap, prhs[6]);
-		_halfWindowSize = 3;
+		_halfWindowSize = 4;
 		//_near = 3;
 		//_far = 15;
 		_numOfSamples = 5;
 		_sigma = 0.2;
-		_numOfThreadsUsed = omp_get_max_threads() - 4;
+		_numOfThreadsUsed = omp_get_max_threads() - 9;
+
 		//_totalTime = 0;
 	}
 
@@ -124,6 +125,8 @@ public:
 		std::vector<double> &costWithBestDepth, std::vector<pixelPos> &otherImagePixelPos, std::vector<pixelColor> &otherImagePixelColor, std::vector<double> &prob
 	);
 
+	int findBestDepth_votes(const std::vector<double> &cost, std::vector<bool> &testedIdSet);
+	void drawSamples_average(const dataMap &distributionMap, std::vector<int> &imageLayerId, int numOfSamples, const pixelPos &curPixel, const pixelPos &formerPixel);
 };
 
 #endif

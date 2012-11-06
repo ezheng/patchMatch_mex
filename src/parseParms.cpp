@@ -2,6 +2,7 @@
 #include <assert.h>
 #include "utility.h"
 #include <omp.h>
+#include <math.h>
 
 #define USE_OPENMP
 
@@ -266,6 +267,23 @@ void patchMatch::drawSamples(const dataMap &distributionMap, std::vector<int> &i
 	drawSamples(distribution, numOfSamples, imageLayerId);
 }
 
+void patchMatch::drawSamples_average(const dataMap &distributionMap, std::vector<int> &imageLayerId, int numOfSamples, const pixelPos &curPixel, const pixelPos &formerPixel)
+{
+	std::vector<double> distribution;
+	distribution.resize(static_cast<int>(distributionMap.d));
+	for(int i = 0; i<distribution.size(); i++)
+	{
+		distribution[i] = (_distributionMap.data[static_cast<int>( curPixel.sub2Idx(distributionMap.h, distributionMap.arraySize, i))]  +
+			_distributionMap.data[static_cast<int>( formerPixel.sub2Idx(distributionMap.h, distributionMap.arraySize, i))]) * 0.5;
+
+	}
+	// normalize distribution:
+	// normalizeDistribution(distribution);
+	drawSamples(distribution, numOfSamples, imageLayerId);
+
+}
+
+
 bool patchMatch::determineFullPatch(const std::vector<pixelColor> &otherImagePixelColor, const int &numOfPixels)
 {
 	for(int i = 0; i < numOfPixels; i++)
@@ -385,7 +403,10 @@ double patchMatch::calculateNCC(std::vector<pixelColor> &otherImagePixelColor, c
 
 	for(int i = 0; i<numOfPixels; i++)
 	{
-		numOfValidPixels++;
+		if(otherImagePixelColor[i]._color.at<double>(3) != 1.0f)
+		{
+			++numOfValidPixels;
+		}
 	}
 	if(numOfValidPixels == 0)
 	{
@@ -486,19 +507,17 @@ void patchMatch::getOrientation(const dataMap &orientationMap, int pixelIdx, cv:
 
 void patchMatch::getRandomOrientation(cv::Mat &orientation)
 {
-	for(int i = 0; i<3; i++)
-		orientation.at<double>(i) = rand()/static_cast<double>(RAND_MAX) * 2.0 - 1.0;
-	//orientation = cv::normalize(orientation);
+	/*for(int i = 0; i<3; i++)
+		orientation.at<double>(i) = rand()/static_cast<double>(RAND_MAX) * 2.0 - 1.0;	
 	cv::normalize(orientation, orientation);
 	if(orientation.at<double>(2) < 0)
 	{
 		orientation *= -1;
-	}
+	}*/
 
 	orientation.at<double>(0) = 0.0;
 	orientation.at<double>(1) = 0.0;
 	orientation.at<double>(2) = 1.0;
-
 
 }
 
@@ -541,8 +560,12 @@ void patchMatch::wrap2(int &formerPixelIdx, int &currentPixelIdx, double *depth,
 		//5) draw samples and update the image ID distribution
 		// draw samples:
 		drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
-		drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
-		
+		//drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
+		drawSamples_average(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel, formerPixel);
+
+		//imageLayerId[0].clear(); imageLayerId[0].push_back(1); imageLayerId[0].push_back(2);
+		//imageLayerId[1].clear(); imageLayerId[1].push_back(3);
+
 		//6) transforming the pixels to the other image (depth given, image id is given) and find the color for given pixels. calculate costs	
 		std::fill(cost.begin(), cost.end(), UNSET);
 
@@ -556,14 +579,26 @@ void patchMatch::wrap2(int &formerPixelIdx, int &currentPixelIdx, double *depth,
 				{
 					// I can calculate all the cost at the same time, in order to save time.
 					for(int i = 0; i<3; i++)
-					{							
-						computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[i]); // cost is the output							
+					{	
+						if( i == 0)
+							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[i]); // cost is the output							
+						else
+						{
+							if(depth[i] == depth[0])
+							{
+								cost[i + 3 * imageLayerId[j][k]] = cost[0 + 3 * imageLayerId[j][k]];
+							}
+							else
+								computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[i]); // cost is the output							
+						}
 					}
 				}				
 			}
 		}
 		//7) based on the cost, VOTE which depth to use. and then save the depth			
 		bestDepthId = findBestDepth_average(cost, testedIdSet);
+		//bestDepthId = findBestDepth_votes(cost, testedIdSet);
+
 		_depthMaps.data[currentPixelIdx] = depth[bestDepthId];
 		assignOrientationMap(_orientationMap, currentPixelIdx, orientation[bestDepthId]);
 
@@ -599,6 +634,7 @@ void patchMatch:: leftToRight()
 	#pragma  omp parallel for schedule(dynamic) 	num_threads(_numOfThreadsUsed)
 #endif
 	for(int row = 0; row < static_cast<int>(ref_h); row += 1)
+	//int row = 300;
 	{	
 		int maxNumOfPixels = static_cast<int>(pow(_halfWindowSize * 2 + 1, 2));
 		pixelPos *refPixelPos = new pixelPos[maxNumOfPixels];
@@ -938,18 +974,63 @@ void patchMatch:: UpdateDistributionMap(const std::vector<double> &cost, const p
 	}	
 }
 
+int patchMatch:: findBestDepth_votes(const std::vector<double> &cost, std::vector<bool> &testedIdSet)
+{
+	int depthVotes[3] = {0}; 
+	for(int i = 0; i < _distributionMap.d; i++)
+	{
+		if(cost[i * 3] != UNSET)
+		{
+			double maxCost = std::max(std::max(cost[i*3], cost[i*3 + 1]), cost[i*3 + 2]);
+			if(cost[i * 3] == maxCost)
+				++depthVotes[0];
+			if(cost[i * 3 + 1] == maxCost)
+				++depthVotes[1];
+			if(cost[i * 3 + 2] == maxCost)
+				++depthVotes[2];			
+		}		
+	}
+	//int maxmumVotes = max(depthVotes[0], max(depthVotes[1], depthVotes[2]));
+	bool repeated = false;
+	int maxVotes = depthVotes[0];
+	int bestDepthId = 0;
+	for(int i = 1; i<3; i++)
+	{
+		if(depthVotes[i] == maxVotes)
+			repeated = true;
+		if(depthVotes[i] > maxVotes)
+		{
+			maxVotes = depthVotes[i];
+			bestDepthId = i;
+			repeated = false;			
+		}
+	}
+	if(!repeated)
+		return bestDepthId;
+	else
+		return findBestDepth_average(cost, testedIdSet);
+}
+
 int patchMatch::findBestDepth_average(const std::vector<double> &cost, std::vector<bool> &testedIdSet)
 {
 
-	double averageCost[3] = {0}; double numOfImagesTested = 0.;
+	double averageCost[3] = {0}; //double numOfImagesTested = 0.;
+	double num[3] = {0};
 	//std::vector<bool> unsetLists;
 	for(int i = 0; i < _distributionMap.d; i++)
 	{
 		if(cost[i * 3] != UNSET)
 		{
+			
 			for(int j = 0; j<3; j++)
-				averageCost[j] += cost[i*3 + j];		
-			numOfImagesTested++;
+			{
+				if(cost[i*3 + j] != -1)
+				{
+					averageCost[j] += cost[i*3 + j];		
+					++num[j];
+				}
+			}			
+			//numOfImagesTested++;
 			testedIdSet[i] = true;
 		}
 		else
@@ -957,10 +1038,14 @@ int patchMatch::findBestDepth_average(const std::vector<double> &cost, std::vect
 			testedIdSet[i] = false;	// not tested
 		}
 	}
-	/*for(int i = 0; i<3; i++)	// calculate the average cost. This step is not necessary.
+
+	for(int i = 0; i<3; i++)	
 	{
-		averageCost[i] /= numOfImagesTested;
-	}*/
+		if(num[i] != 0)
+			averageCost[i] /= (num[i]);
+		else
+			averageCost[i] = -1.0;
+	}
 
 	double maxCost = averageCost[0];
 	int bestDepthId = 0;
