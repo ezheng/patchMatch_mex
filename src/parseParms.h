@@ -60,7 +60,7 @@ public:
 		//_far = 15;
 		//_numOfSamples = 3;
 		_sigma = 0.2;
-		_numOfThreadsUsed = omp_get_max_threads() - 3;
+		_numOfThreadsUsed = omp_get_max_threads() - 8;
 
 		_numOfSamples = static_cast<int>(mxGetScalar( prhs[7]));
 		if(_numOfSamples != 1)
@@ -98,10 +98,10 @@ public:
 	void drawSamples(const dataMap &distributionMap, std::vector<int> &imageLayerId, int numOfSamples, const pixelPos &curPixel);
 	void normalizeDistribution(std::vector<double> &distribution);
 
-	void computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, const pixelPos* refPixelPos, const std::vector<pixelColor> &refNormColor,  const pixelColor &deviationColor,
+	void computeCost(const double &row, const double &col, double &cost, const std::vector<pixelColor> &refPixelColor, const pixelPos* refPixelPos, const std::vector<pixelColor> &refNormColor,  const pixelColor &deviationColor,
 		int imageId, const double &depth,  const int& numOfPixels, std::vector<pixelPos> &otherImagePixelPos, std::vector<pixelColor> &otherImagePixelColor, const cv::Mat &orientation);
 
-	void getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos> &*/const pixelPos* refPixelPos, 
+	void getOtherImagePixelPos(const double &row, const double &col, std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos> &*/const pixelPos* refPixelPos, 
 		double depth, int imageId, const int& numOfPixels, const cv::Mat &orientation);
 	
 	double calculateNCC(std::vector<pixelColor> &otherImagePixelColor, const std::vector<pixelColor> &refPixelColor, const int &numOfPixels);
@@ -115,13 +115,13 @@ public:
 		const std::vector<pixelColor> &otherNormColor, const pixelColor &otherImageDeviationColor, const int &numOfPixels);
 
 	void getOrientation(const dataMap &orientationMap, int pixelIdx, cv::Mat &orientation);
-	void getRandomOrientation(cv::Mat &orientation);
+	double getRandomOrientation(cv::Mat &orientation);
 	void assignOrientationMap(dataMap &orientationMap, const int &currentPixelIdx, const cv::Mat &orientation);
 
 	void wrap1(const double &row, const double &col, double &colStart, double &colEnd,
 		double &rowStart, double &rowEnd, int &numOfPixels, pixelPos *refPixelPos, std::vector<pixelColor> &refPixelColor, const double &ref_w, const double &ref_h);
 
-	void patchMatch::wrap2(int &formerPixelIdx, int &currentPixelIdx, double *depth, 
+	void patchMatch::wrap2(const double &row, const double &col, int &formerPixelIdx, int &currentPixelIdx, double *depth, 
 		cv::Mat *orientation, std::vector<int> *imageLayerId, const int &numOfPixels,
 		pixelPos &formerPixel, pixelPos &currentPixel, 
 		std::vector<pixelColor> &refPixelColor, std::vector<pixelColor> &refNormColor, pixelPos *refPixelPos,
