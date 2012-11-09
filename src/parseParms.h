@@ -58,9 +58,13 @@ public:
 		_halfWindowSize = 4;
 		//_near = 3;
 		//_far = 15;
-		_numOfSamples = 5;
+		//_numOfSamples = 3;
 		_sigma = 0.2;
-		_numOfThreadsUsed = omp_get_max_threads() - 9;
+		_numOfThreadsUsed = omp_get_max_threads() - 3;
+
+		_numOfSamples = static_cast<int>(mxGetScalar( prhs[7]));
+		if(_numOfSamples != 1)
+			_numOfSamples = 5;
 
 		//_totalTime = 0;
 	}
