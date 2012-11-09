@@ -263,7 +263,7 @@ void patchMatch::drawSamples(const dataMap &distributionMap, std::vector<int> &i
 		distribution[i] = _distributionMap.data[static_cast<int>( curPixel.sub2Idx(distributionMap.h, distributionMap.arraySize, i))];
 	}
 	// normalize distribution:
-	// normalizeDistribution(distribution);
+	normalizeDistribution(distribution);
 	drawSamples(distribution, numOfSamples, imageLayerId);
 }
 
@@ -278,7 +278,7 @@ void patchMatch::drawSamples_average(const dataMap &distributionMap, std::vector
 
 	}
 	// normalize distribution:
-	// normalizeDistribution(distribution);
+	normalizeDistribution(distribution);
 	drawSamples(distribution, numOfSamples, imageLayerId);
 
 }
@@ -355,7 +355,8 @@ void patchMatch:: computeCost(double &cost, const std::vector<pixelColor> &refPi
 	
 }	
 
-void patchMatch::getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos>*/ const pixelPos* refPixelPos, double depth, int imageId, const int& numOfPixels, const cv::Mat &orientation)
+void patchMatch::
+	(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos>*/ const pixelPos* refPixelPos, double depth, int imageId, const int& numOfPixels, const cv::Mat &orientation)
 {
 	//cv::Mat normalVector = (cv::Mat_<double>(1,3) << 0, 0, 1);
 	//cv::Mat opencv_R = _imgStruct_2[imageId].opencv_R *_imgStruct_1[0].opencv_inverseR ;
@@ -365,6 +366,8 @@ void patchMatch::getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos
 	
 	cv::Mat H2 = _imgStruct_2[imageId].opencv_K * _imgStruct_2[imageId].opencv_relative_T * orientation * _imgStruct_1[0].opencv_inverseK;
 	
+	//cv::Mat pixelIn3dCoord = _imgStruct_1[0].opencv_inverseK
+
 	cv::Mat H = _imgStruct_2[imageId].H1 - (H2/depth);
 	
 
@@ -559,9 +562,13 @@ void patchMatch::wrap2(int &formerPixelIdx, int &currentPixelIdx, double *depth,
 
 		//5) draw samples and update the image ID distribution
 		// draw samples:
-		drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
+		if(_numOfSamples == 1)
+			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
 		//drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
-		drawSamples_average(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel, formerPixel);
+		else
+			//drawSamples_average(_distributionMap, imageLayerId[0], _numOfSamples, currentPixel, formerPixel);
+			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, currentPixel);	
+		imageLayerId[1] = imageLayerId[0];
 
 		//imageLayerId[0].clear(); imageLayerId[0].push_back(1); imageLayerId[0].push_back(2);
 		//imageLayerId[1].clear(); imageLayerId[1].push_back(3);
@@ -963,7 +970,9 @@ void patchMatch:: UpdateDistributionMap(const std::vector<double> &cost, const p
 	{
 		prob[i] = exp(-0.5 * (1-cost[i]) * (1-cost[i]) * variance_inv);
 	}
-	double sum = 0;
+	// do not do normalization
+
+	/* double sum = 0;
 	for(int i =0; i<prob.size(); i++)
 	{
 		sum += prob[i];
@@ -971,7 +980,12 @@ void patchMatch:: UpdateDistributionMap(const std::vector<double> &cost, const p
 	for(int i = 0; i< cost.size(); i++)
 	{
 		distributionMap.data[static_cast<int>(currentPos.sub2Idx(distributionMap.h, distributionMap.arraySize, i))] = prob[i]/sum;
-	}	
+	}	*/
+
+	for(int i = 0; i<cost.size(); i++)
+	{
+		distributionMap.data[static_cast<int>(currentPos.sub2Idx(distributionMap.h, distributionMap.arraySize, i))] = prob[i];
+	}
 }
 
 int patchMatch:: findBestDepth_votes(const std::vector<double> &cost, std::vector<bool> &testedIdSet)
@@ -1024,11 +1038,11 @@ int patchMatch::findBestDepth_average(const std::vector<double> &cost, std::vect
 			
 			for(int j = 0; j<3; j++)
 			{
-				if(cost[i*3 + j] != -1)
-				{
+				//if(cost[i*3 + j] != -1)
+				//{
 					averageCost[j] += cost[i*3 + j];		
-					++num[j];
-				}
+					//++num[j];
+				//}
 			}			
 			//numOfImagesTested++;
 			testedIdSet[i] = true;
@@ -1039,13 +1053,13 @@ int patchMatch::findBestDepth_average(const std::vector<double> &cost, std::vect
 		}
 	}
 
-	for(int i = 0; i<3; i++)	
+	/*for(int i = 0; i<3; i++)	
 	{
 		if(num[i] != 0)
 			averageCost[i] /= (num[i]);
 		else
 			averageCost[i] = -1.0;
-	}
+	}*/
 
 	double maxCost = averageCost[0];
 	int bestDepthId = 0;
