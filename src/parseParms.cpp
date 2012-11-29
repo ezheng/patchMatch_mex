@@ -8,15 +8,6 @@
 
 #define UNSET -2.0
 
-#define INVERSE_ROOT_2  0.707106781186547
-//const double orientationTable[15] = { 0, 0, 1, 
-//	0, INVERSE_ROOT_2, INVERSE_ROOT_2, 
-//	0, -INVERSE_ROOT_2, INVERSE_ROOT_2, 
-//	INVERSE_ROOT_2, 0, INVERSE_ROOT_2, 
-//	-INVERSE_ROOT_2, 0, INVERSE_ROOT_2};	
-const double orientationTable[6] = { 0, 0, 1, 
-									0, 0.9939, 0.1104};	
-
 void patchMatch:: parseImageStructure(std::vector<ImageStruct> *allImgStruct, const mxArray* prhs)
 {
 	int nfields = mxGetNumberOfFields(prhs);	
@@ -333,11 +324,11 @@ double patchMatch :: calculateNCC_withNormalized(const std::vector<pixelColor> &
 }
 
 
-void patchMatch:: computeCost(const double &row, const double &col, double &cost, const std::vector<pixelColor> &refPixelColor, const pixelPos* refPixelPos, const std::vector<pixelColor> &refNormColor, const pixelColor &refDeviationColor,
+void patchMatch:: computeCost(double &cost, const std::vector<pixelColor> &refPixelColor, const pixelPos* refPixelPos, const std::vector<pixelColor> &refNormColor, const pixelColor &refDeviationColor,
 	int imageId, const double &depth, const int& numOfPixels, std::vector<pixelPos> &otherImagePixelPos, std::vector<pixelColor> &otherImagePixelColor, const cv::Mat &orientation)
 {	
 	
-	getOtherImagePixelPos(row, col, otherImagePixelPos, refPixelPos, depth, imageId, numOfPixels, orientation);
+	getOtherImagePixelPos(otherImagePixelPos, refPixelPos, depth, imageId, numOfPixels, orientation);
 	
 	//_tt.startTimer();
 	findPixelColorsInterpolation(otherImagePixelColor, otherImagePixelPos, _imgStruct_2[imageId], numOfPixels);	// 	
@@ -359,12 +350,11 @@ void patchMatch:: computeCost(const double &row, const double &col, double &cost
 		cost = calculateNCC( otherImagePixelColor, refPixelColor, numOfPixels);
 		//_tt.calculateTotalTime();
 	}
-	_tt.calculateTotalTime();
-		
+	_tt.calculateTotalTime();		
 	
 }	
 
-void patchMatch::getOtherImagePixelPos(const double &row, const double &col, std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos>*/ const pixelPos* refPixelPos, double depth, int imageId, const int& numOfPixels, const cv::Mat &orientation)
+void patchMatch::getOtherImagePixelPos(std::vector<pixelPos> &otherImagePixelPos, /*const std::vector<pixelPos>*/ const pixelPos* refPixelPos, double depth, int imageId, const int& numOfPixels, const cv::Mat &orientation)
 {
 	//cv::Mat normalVector = (cv::Mat_<double>(1,3) << 0, 0, 1);
 	//cv::Mat opencv_R = _imgStruct_2[imageId].opencv_R *_imgStruct_1[0].opencv_inverseR ;
@@ -374,25 +364,16 @@ void patchMatch::getOtherImagePixelPos(const double &row, const double &col, std
 	
 	cv::Mat H2 = _imgStruct_2[imageId].opencv_K * _imgStruct_2[imageId].opencv_relative_T * orientation * _imgStruct_1[0].opencv_inverseK;
 	
-	//cv::Mat pixelInImageCoord = (cv::Mat_<double>(3, 1) << col, row, 1.0);
-	//cv::Mat pixelIn3dCoord = _imgStruct_1[0].opencv_inverseK * pixelInImageCoord;
-	double x_world = (col + 0.5 - _imgStruct_1[0].opencv_K.at<double>(0,2)) / _imgStruct_1[0].opencv_K.at<double>(0,0);
-	double y_world = (row + 0.5 - _imgStruct_1[0].opencv_K.at<double>(1,2)) / _imgStruct_1[0].opencv_K.at<double>(1,1);
-	//double z_world = depth;
+	//cv::Mat pixelIn3dCoord = _imgStruct_1[0].opencv_inverseK
 
-	cv::Mat pixelIn3dCoord = (cv::Mat_<double>(1, 3) << x_world * depth , y_world * depth, depth);
-
-	//p = [ (x(1) - K1(1,3)) / K1(1,1), (y(1) - K1(2,3))/K1(2,2), 1 ] * z(1);
-	//pixelIn3dCoord.at<double>(3) = depth;	
-
-	double d = pixelIn3dCoord.dot(orientation);
+	cv::Mat H = _imgStruct_2[imageId].H1 - (H2/depth);
 	
-	
-	cv::Mat H = _imgStruct_2[imageId].H1 - (H2/d); // H2 is related to the orientation
 
-	//cv::Mat H = _imgStruct_2[imageId].H1 - (H2/depth);
-	//H2 = opencv_K * opencv_relative_T * normalVector * refImg.opencv_inverseK;
-	//int numOfPixels = static_cast<int>(refPixelPos.size());	
+//		H2 = opencv_K * opencv_relative_T * normalVector * refImg.opencv_inverseK;
+
+
+	//int numOfPixels = static_cast<int>(refPixelPos.size());
+	
 	//otherImagePixelPos.resize(numOfPixels);
 	for(int i = 0; i<numOfPixels; i++)
 	{
@@ -514,27 +495,18 @@ double patchMatch::calculateNCC(std::vector<pixelColor> &otherImagePixelColor, c
 	return (cost_rgb[0] + cost_rgb[1] + cost_rgb[2])/3.0 * inverseNumOfValidPixels;
 }
 
-
-
-
 void patchMatch::getOrientation(const dataMap &orientationMap, int pixelIdx, cv::Mat &orientation)
 {
-	int orientationId = static_cast<int>(orientationMap.data[pixelIdx]);
-
-	orientation.at<double>(0) = orientationTable[ orientationId * 3 ];
-	orientation.at<double>(1) = orientationTable[ orientationId * 3 + 1];
-	orientation.at<double>(2) = orientationTable[ orientationId * 3 + 2];
-
-	/*orientation.at<double>(0) = orientationMap.data[pixelIdx];
+	orientation.at<double>(0) = orientationMap.data[pixelIdx];
 	orientation.at<double>(1) = orientationMap.data[pixelIdx + static_cast<int>(orientationMap.arraySize)];
 	orientation.at<double>(2) = orientationMap.data[pixelIdx + static_cast<int>(orientationMap.arraySize) * 2];
 	if(orientation.at<double>(2) < 0)
 	{
 		orientation *= -1;
-	}*/
+	}
 }
 
-double patchMatch::getRandomOrientation(cv::Mat &orientation)
+void patchMatch::getRandomOrientation(cv::Mat &orientation)
 {
 	/*for(int i = 0; i<3; i++)
 		orientation.at<double>(i) = rand()/static_cast<double>(RAND_MAX) * 2.0 - 1.0;	
@@ -543,17 +515,11 @@ double patchMatch::getRandomOrientation(cv::Mat &orientation)
 	{
 		orientation *= -1;
 	}*/
-	double orientationId = (floor(rand()/(static_cast<double>(RAND_MAX) + 1.0) * 2.0));
 
-
-	/*orientation.at<double>(0) = 0.0;
+	orientation.at<double>(0) = 0.0;
 	orientation.at<double>(1) = 0.0;
-	orientation.at<double>(2) = 1.0;*/
-	orientation.at<double>(0) = orientationTable[ static_cast<int>(orientationId) * 3 ];
-	orientation.at<double>(1) = orientationTable[ static_cast<int>(orientationId) * 3 + 1];
-	orientation.at<double>(2) = orientationTable[ static_cast<int>(orientationId) * 3 + 2];
+	orientation.at<double>(2) = 1.0;
 
-	return orientationId;
 }
 
 void patchMatch::wrap1(const double &row, const double &col, double &colStart, double &colEnd,
@@ -573,7 +539,7 @@ void patchMatch::wrap1(const double &row, const double &col, double &colStart, d
 	findPixelColors(refPixelColor, refPixelPos, _imgStruct_1[0], numOfPixels);	// within this function, it should allow non-integer pixel positions
 }
 
-void patchMatch::wrap2(const double &row, const double &col, int &formerPixelIdx, int &currentPixelIdx, double *depth, 
+void patchMatch::wrap2(int &formerPixelIdx, int &currentPixelIdx, double *depth, 
 	cv::Mat *orientation, std::vector<int> *imageLayerId, const int &numOfPixels,
 	pixelPos &formerPixel, pixelPos &currentPixel, 
 	std::vector<pixelColor> &refPixelColor, std::vector<pixelColor> &refNormColor, pixelPos *refPixelPos,
@@ -587,8 +553,10 @@ void patchMatch::wrap2(const double &row, const double &col, int &formerPixelIdx
 						
 		depth[0] = _depthMaps.data[formerPixelIdx]; 
 		getOrientation(_orientationMap, formerPixelIdx, orientation[0]);
-		depth[1] = _depthRandomMaps.data[currentPixelIdx]; /* randomly initialize a orientation*/ 
-		double randomOrientationID = getRandomOrientation(orientation[1]);
+		//depth[1] = _depthRandomMaps.data[currentPixelIdx]; /* randomly initialize a orientation*/ 
+		depth[1] = depth[0] + (rand()/static_cast<double>(RAND_MAX) - 0.5)*0.2 ;
+
+		getRandomOrientation(orientation[1]);
 		depth[2] = _depthMaps.data[currentPixelIdx]; 
 		getOrientation(_orientationMap, currentPixelIdx, orientation[2]);
 
@@ -596,14 +564,14 @@ void patchMatch::wrap2(const double &row, const double &col, int &formerPixelIdx
 		// draw samples:
 		if(_numOfSamples == 1)
 			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, formerPixel);			
-			//drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
+		//drawSamples(_distributionMap, imageLayerId[1], _numOfSamples, currentPixel);	
 		else
-			//drawSamples_average(_distributionMap, imageLayerId[0], _numOfSamples, currentPixel, formerPixel);
-			drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, currentPixel);	
+			drawSamples_average(_distributionMap, imageLayerId[0], _numOfSamples, currentPixel, formerPixel);
+			//drawSamples(_distributionMap, imageLayerId[0], _numOfSamples, currentPixel);	
 		imageLayerId[1] = imageLayerId[0];
 
-	//	imageLayerId[0].clear(); imageLayerId[0].push_back(1); imageLayerId[0].push_back(2);
-	//	imageLayerId[1].clear(); imageLayerId[1].push_back(3);
+		//imageLayerId[0].clear(); imageLayerId[0].push_back(1); imageLayerId[0].push_back(2);
+		//imageLayerId[1].clear(); imageLayerId[1].push_back(3);
 
 		//6) transforming the pixels to the other image (depth given, image id is given) and find the color for given pixels. calculate costs	
 		std::fill(cost.begin(), cost.end(), UNSET);
@@ -620,7 +588,7 @@ void patchMatch::wrap2(const double &row, const double &col, int &formerPixelIdx
 					for(int i = 0; i<3; i++)
 					{	
 						if( i == 0)
-							computeCost(row, col, cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[i]); // cost is the output							
+							computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[i]); // cost is the output							
 						else
 						{
 							if(depth[i] == depth[0])
@@ -628,7 +596,7 @@ void patchMatch::wrap2(const double &row, const double &col, int &formerPixelIdx
 								cost[i + 3 * imageLayerId[j][k]] = cost[0 + 3 * imageLayerId[j][k]];
 							}
 							else
-								computeCost(row, col, cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[i]); // cost is the output							
+								computeCost(cost[i + 3 * imageLayerId[j][k]], refPixelColor, refPixelPos, refNormColor, deviationColor, imageLayerId[j][k], depth[i], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[i]); // cost is the output							
 						}
 					}
 				}				
@@ -639,13 +607,7 @@ void patchMatch::wrap2(const double &row, const double &col, int &formerPixelIdx
 		//bestDepthId = findBestDepth_votes(cost, testedIdSet);
 
 		_depthMaps.data[currentPixelIdx] = depth[bestDepthId];
-		if(bestDepthId == 0)
-			_orientationMap.data[currentPixelIdx] = _orientationMap.data[formerPixelIdx];
-		else if(bestDepthId == 1)
-			_orientationMap.data[currentPixelIdx] = randomOrientationID;
-		// if bestDepthId == 2, then the orientation map is not changed
-
-		//assignOrientationMap(_orientationMap, currentPixelIdx, orientation[bestDepthId]);
+		assignOrientationMap(_orientationMap, currentPixelIdx, orientation[bestDepthId]);
 
 		//8) test the untested sample
 		/*std::vector<double> costWithBestDepth; 
@@ -654,7 +616,7 @@ void patchMatch::wrap2(const double &row, const double &col, int &formerPixelIdx
 		{
 			if(testedIdSet[j] == false)	// not tested before
 			{					
-				computeCost(row, col, costWithBestDepth[j], refPixelColor, refPixelPos, refNormColor, deviationColor, j, depth[bestDepthId], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[bestDepthId]); // cost is the output
+				computeCost(costWithBestDepth[j], refPixelColor, refPixelPos, refNormColor, deviationColor, j, depth[bestDepthId], numOfPixels, otherImagePixelPos, otherImagePixelColor, orientation[bestDepthId]); // cost is the output
 			}
 			else
 				costWithBestDepth[j] = cost[j*3 + bestDepthId] ;
@@ -724,7 +686,7 @@ void patchMatch:: leftToRight()
 			formerPixel._pt.at<double>(0) = col - 1;  formerPixel._pt.at<double>(1) = static_cast<double>(row); 
 			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = static_cast<double>(row); 
 			
-			wrap2(static_cast<double>(row), col, formerPixelIdx, currentPixelIdx, depth,
+			wrap2(formerPixelIdx, currentPixelIdx, depth,
 				orientation, imageLayerId, numOfPixels,
 				formerPixel, currentPixel, refPixelColor, refNormColor, refPixelPos,
 				cost, testedIdSet, bestDepthId, 
@@ -736,10 +698,9 @@ void patchMatch:: leftToRight()
 
 void patchMatch::assignOrientationMap(dataMap &orientationMap, const int &currentPixelIdx, const cv::Mat &orientation)
 {
-	//orientationMap.data[currentPixelIdx] = 	orientation.at<double>(0);
-	//orientationMap.data[currentPixelIdx + static_cast<int>(orientationMap.arraySize)] = orientation.at<double>(1);
-	//orientationMap.data[currentPixelIdx + static_cast<int>(orientationMap.arraySize) * 2] = orientation.at<double>(2);
-
+	orientationMap.data[currentPixelIdx] = 	orientation.at<double>(0);
+	orientationMap.data[currentPixelIdx + static_cast<int>(orientationMap.arraySize)] = orientation.at<double>(1);
+	orientationMap.data[currentPixelIdx + static_cast<int>(orientationMap.arraySize) * 2] = orientation.at<double>(2);
 }
 
 void patchMatch:: TopToDown()
@@ -802,7 +763,7 @@ void patchMatch:: TopToDown()
 			formerPixel._pt.at<double>(0) = col;  formerPixel._pt.at<double>(1) = static_cast<double>(row - 1); 
 			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = static_cast<double>(row); 
 			
-			wrap2(row, static_cast<double>(col), formerPixelIdx, currentPixelIdx, depth,
+			wrap2(formerPixelIdx, currentPixelIdx, depth,
 				orientation, imageLayerId, numOfPixels,
 				formerPixel, currentPixel, refPixelColor, refNormColor, refPixelPos,
 				cost, testedIdSet, bestDepthId, 
@@ -886,7 +847,7 @@ void patchMatch:: DownToTop()
 			formerPixel._pt.at<double>(0) = col;  formerPixel._pt.at<double>(1) = static_cast<double>(row + 1); 
 			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = static_cast<double>(row); 
 			
-			wrap2(row, static_cast<double>(col), formerPixelIdx, currentPixelIdx, depth,
+			wrap2(formerPixelIdx, currentPixelIdx, depth,
 				orientation, imageLayerId, numOfPixels,
 				formerPixel, currentPixel, refPixelColor, refNormColor, refPixelPos,
 				cost, testedIdSet, bestDepthId, 
@@ -961,7 +922,7 @@ void patchMatch:: RightToLeft()
 			formerPixel._pt.at<double>(0) = col + 1;  formerPixel._pt.at<double>(1) = static_cast<double>(row); 
 			currentPixel._pt.at<double>(0) = col;  currentPixel._pt.at<double>(1) = static_cast<double>(row); 
 			
-			wrap2(static_cast<double>(row), col, formerPixelIdx, currentPixelIdx, depth,
+			wrap2(formerPixelIdx, currentPixelIdx, depth,
 				orientation, imageLayerId, numOfPixels,
 				formerPixel, currentPixel, refPixelColor, refNormColor, refPixelPos,
 				cost, testedIdSet, bestDepthId, 
